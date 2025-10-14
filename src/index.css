@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  body {
+    @apply m-0 min-h-screen bg-[#f3f7ff] font-sans text-midnight antialiased overflow-x-hidden;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(152, 209, 255, 0.45), transparent 60%),
+      radial-gradient(circle at 80% 15%, rgba(250, 225, 255, 0.4), transparent 58%),
+      radial-gradient(circle at 10% 85%, rgba(204, 236, 255, 0.35), transparent 60%),
+      linear-gradient(180deg, #f6f9ff 0%, #e9f1ff 55%, #deeaff 100%);
+  }
+
+  #root {
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  [class*="text-midnight/"] {
+    color: #0f172a !important;
+  }
+
+  [class*="text-horizon/"] {
+    color: #143e7c !important;
+  }
+
+  p,
+  span,
+  li {
+    color: #0f172a;
+  }
+
+  button {
+    transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background-color: #143e7c;
+    color: #ffffff;
+    box-shadow: 0 10px 25px -12px rgba(20, 62, 124, 0.45);
+  }
+
+  ::selection {
+    background-color: rgba(74, 182, 255, 0.35);
+    color: white;
+  }
+}
