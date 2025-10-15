@@ -1,3 +1,20 @@
 scripts:
   buildCommand: npm run build
   runCommand: npm start
+
+run:
+  env:
+    - key: VITE_FIREBASE_API_KEY
+      value: AIzaSyAG_0Nq4ph0CgKmT1Z4bhIMCVlc-dS6ois
+    - key: VITE_FIREBASE_AUTH_DOMAIN
+      value: valleyairporterapp.firebaseapp.com
+    - key: VITE_FIREBASE_PROJECT_ID
+      value: valleyairporterapp
+    - key: VITE_FIREBASE_APP_ID
+      value: 1:538611613133:web:b4f401243bc76d69bad884
+    - key: VITE_FIREBASE_STORAGE_BUCKET
+      value: valleyairporterapp.firebasestorage.app
+    - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+      value: "538611613133"
+    - key: VITE_APP_ENV
+      value: production      # important: prevents emulator connection
