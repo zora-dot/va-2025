@@ -31,7 +31,7 @@ export const env = {
     aviationstackApiKey: getEnv("VITE_AVIATIONSTACK_API_KEY", ""),
   },
   runtime: {
-    appEnv: getEnv("VITE_APP_ENV", "local"),
+    appEnv: getEnv("VITE_APP_ENV", import.meta.env.PROD ? "production" : "local"),
     appVersion: getEnv("VITE_APP_VERSION", "0.0.0"),
     appName: getEnv("VITE_APP_NAME", "Valley Airporter"),
     appDomain: getEnv("VITE_APP_DOMAIN", ""),
