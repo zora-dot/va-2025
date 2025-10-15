@@ -17,6 +17,17 @@ import {
 } from "firebase/auth"
 import { useFirebaseServices } from "@/app/providers/FirebaseContext"
 import type { AppUserRole, AuthContextValue } from "@/lib/types/auth"
+import { env } from "@/lib/config/env"
+
+if (import.meta.env.PROD) {
+  console.log("Firebase env check →", {
+    apiKey: !!env.firebase?.apiKey,
+    authDomain: env.firebase?.authDomain,
+    projectId: env.firebase?.projectId,
+    appId: !!env.firebase?.appId,
+    enabled: env.runtime.firebaseEnabled,
+  })
+}
 
 const defaultRoles: AppUserRole[] = ["guest"]
 
