@@ -17,4 +17,4 @@ run:
     - key: VITE_FIREBASE_MESSAGING_SENDER_ID
       value: "538611613133"
     - key: VITE_APP_ENV
-      value: production      # important: prevents emulator connection
+      value: production
