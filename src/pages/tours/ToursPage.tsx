@@ -1,12 +1,21 @@
 import { GlassPanel } from "@/components/ui/GlassPanel"
+import { ResponsiveImage } from "@/components/ui/ResponsiveImage"
 import { HOURLY_TOUR_LABEL } from "@/features/booking/pricing"
+
+const toResponsiveSrc = (url: string, width: number) => {
+  if (!url) return url
+  const withWidth = url.includes("w=")
+    ? url.replace(/w=\d+/g, `w=${width}`)
+    : `${url}${url.includes("?") ? "&" : "?"}w=${width}`
+  return withWidth.includes("fm=webp") ? withWidth : `${withWidth}${withWidth.includes("?") ? "&" : "?"}fm=webp`
+}
 
 const tourPackages = [
   {
     name: "Sea-to-Sky Explorer",
     description:
       "Private shuttle from the Fraser Valley to Whistler Village with scenic stops in Squamish and Shannon Falls. Ideal for ski getaways or alpine sightseeing.",
-    image: "https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?auto=format&fit=crop&w=1200&q=80",
+    image: "https://i.postimg.cc/fRtzmCt8/oie-6q-X3sv-Uk8bj8.jpg",
     duration: "8-10 hours",
     highlights: ["Door-to-door pickup", "Gear-friendly sprinter vans", "Coordinated return transfer"],
   },
@@ -48,17 +57,34 @@ export const ToursPage = () => {
             pricing available on request).
           </p>
         </div>
-        <img
-          src="https://images.unsplash.com/photo-1528892952291-009c663ce843?auto=format&fit=crop&w=900&q=80"
+        <ResponsiveImage
+          src="https://i.postimg.cc/mZMKYMhB/778-7786017-airport-shuttle-minibus-1.png"
           alt="Shuttle parked near mountain outlook"
-          className="h-56 w-full rounded-3xl object-cover shadow-lg"
-          loading="lazy"
+          className="h-[380px] w-full rounded-3xl object-cover shadow-lg"
+          sources={[
+            {
+              srcSet: toResponsiveSrc("https://i.postimg.cc/mZMKYMhB/778-7786017-airport-shuttle-minibus-1.png", 640),
+              type: "image/webp",
+              media: "(max-width: 768px)",
+            },
+          ]}
         />
       </GlassPanel>
 
       {tourPackages.map((tour) => (
         <GlassPanel key={tour.name} className="grid gap-6 p-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <img src={tour.image} alt={tour.name} className="h-60 w-full rounded-3xl object-cover shadow-md" loading="lazy" />
+          <ResponsiveImage
+            src={tour.image}
+            alt={tour.name}
+            className="h-60 w-full rounded-3xl object-cover shadow-md"
+            sources={[
+            {
+              srcSet: toResponsiveSrc(tour.image, 640),
+              type: "image/webp",
+              media: "(max-width: 768px)",
+            },
+          ]}
+        />
           <div className="flex flex-col gap-4">
             <div>
               <h2 className="font-heading text-2xl uppercase tracking-[0.28em] text-horizon">

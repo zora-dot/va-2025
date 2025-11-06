@@ -21,8 +21,8 @@ export const faqs = [
   { question: 'Do you offer Corporate Accounts for Businesses that frequently need Shuttle Service?', answer: 'Yes, we accept and can set up Corporate Accounts' },
   { question: 'What is the Smallest Sized Vehicle you have?', answer: 'The Smallest Vehicle we have is a 7-Seater Minivan.' },
   { question: 'Will it be a Shared Ride/Other Passengers on our Shuttle?', answer: 'Yes, we may sometimes have other passengers going in the same direction depending on the bookings.' },
-  { question: 'What Airports do you Service?', answer: 'We Service the following Airports: 1. Abbotsford International Airport (YXX) 2. Vancouver International Airport (YVR) 3. Bellingham International Airport (BLI)' },
-  { question: 'Do you service the Ferry Terminals and the Cruise Ship Terminal?', answer: 'Yes, we provide service to the following Terminals: 1. Tsawwassen Ferry Terminal in Delta 2. Horseshoe Bay Ferry Terminal in West Vancouver 3. Canada Place Cruise Terminal in Vancouver' },
+  { question: 'What Airports do you Service?', answer: 'We Service the following Airports:\n1. Abbotsford International Airport (YXX)\n2. Vancouver International Airport (YVR)\n3. Bellingham International Airport (BLI)' },
+  { question: 'Do you service the Ferry Terminals and the Cruise Ship Terminal?', answer: 'Yes, we provide service to the following Terminals:\n1. Tsawwassen Ferry Terminal in Delta\n2. Horseshoe Bay Ferry Terminal in West Vancouver\n3. Canada Place Cruise Terminal in Vancouver' },
   { question: 'Is Pre-Payment Required?', answer: 'Pre-Payment is usually not required, but depends on the situation' },
-  { question: 'How is Payment Made?', answer: 'You can pay via Cash, Debit/Credit Card, E-Transfer, or Airline Vouchers etc. **For any other Questions on Concerns please let us know.** -----------------------------------------------------------' },
+  { question: 'How is Payment Made?', answer: 'You can pay via cash, debit/credit card, e-transfer, or airline vouchers. For any other questions or concerns, please let us know.' },
 ] as const

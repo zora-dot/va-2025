@@ -25,6 +25,7 @@ export const env = {
   firebase: firebaseConfig,
   integrations: {
     googleCalendarApiKey: getEnv("VITE_GOOGLE_CALENDAR_API_KEY"),
+    googleMapsBrowserKey: getEnv("VITE_GOOGLE_MAPS_BROWSER_KEY"),
     squareApplicationId: getEnv("VITE_SQUARE_APPLICATION_ID"),
     squareLocationId: getEnv("VITE_SQUARE_LOCATION_ID"),
     stripePublishableKey: getEnv("VITE_STRIPE_PUBLISHABLE_KEY", ""),

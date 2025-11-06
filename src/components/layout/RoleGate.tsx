@@ -4,20 +4,53 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { useFirebase } from "@/lib/hooks/useFirebase"
 import { useNavigate, useRouterState } from "@tanstack/react-router"
 import type { AppUserRole } from "@/lib/types/auth"
+import { useUserProfile } from "@/lib/hooks/useProfile"
+import { MAGIC_LINK_PASSWORD_REQUIRED_KEY } from "@/app/providers/AuthProvider"
 
 type RoleGateProps = PropsWithChildren<{
   allowedRoles: AppUserRole[]
   headline: string
   description?: string
   previewMode?: boolean
+  requireProfile?: boolean
 }>
 
-export const RoleGate = ({ allowedRoles, headline, description, previewMode = false, children }: RoleGateProps) => {
+export const RoleGate = ({
+  allowedRoles,
+  headline,
+  description,
+  previewMode = false,
+  requireProfile = true,
+  children,
+}: RoleGateProps) => {
   const auth = useAuth()
   const firebase = useFirebase()
   const navigate = useNavigate()
   const { location } = useRouterState()
-  const currentPath = `${location.pathname}${location.search ?? ""}${location.hash ?? ""}`
+  const currentPath = (() => {
+    const pathname = location.pathname ?? ""
+    const rawSearch = location.search
+    let search = ""
+    if (typeof rawSearch === "string") {
+      search = rawSearch
+    } else if (rawSearch && typeof rawSearch === "object") {
+      const params = new URLSearchParams()
+      for (const [key, value] of Object.entries(rawSearch)) {
+        if (Array.isArray(value)) {
+          value.forEach((entry) => params.append(key, String(entry)))
+        } else if (value !== undefined && value !== null) {
+          params.set(key, String(value))
+        }
+      }
+      const query = params.toString()
+      if (query) {
+        search = `?${query}`
+      }
+    }
+    const hash = typeof location.hash === "string" ? location.hash : ""
+    return `${pathname}${search}${hash}`
+  })()
+  const { profile, loading: profileLoading } = useUserProfile(requireProfile && Boolean(auth.user))
 
   const allowPreview = true
 
@@ -92,6 +125,42 @@ export const RoleGate = ({ allowedRoles, headline, description, previewMode = fa
     )
   }
 
+  const needsPassword = (() => {
+    if (!auth.user) return false
+    if (typeof window === "undefined") {
+      return !auth.hasPasswordProvider
+    }
+    try {
+      const flag = window.localStorage.getItem(MAGIC_LINK_PASSWORD_REQUIRED_KEY) === "true"
+      if (auth.hasPasswordProvider) {
+        if (flag) {
+          window.localStorage.removeItem(MAGIC_LINK_PASSWORD_REQUIRED_KEY)
+        }
+        return false
+      }
+      return flag || !auth.hasPasswordProvider
+    } catch {
+      return !auth.hasPasswordProvider
+    }
+  })()
+
+  if (needsPassword && !location.pathname.startsWith("/auth/set-password")) {
+    navigate({
+      to: "/auth/set-password",
+      search: { redirect: currentPath, requirePassword: "1" },
+    })
+    return (
+      <GlassPanel className="p-6 text-center">
+        <p className="font-heading text-base uppercase tracking-[0.32em] text-horizon">
+          Secure your account
+        </p>
+        <p className="mt-3 text-sm text-midnight">
+          Create a password to continue. You can still request magic links anytime.
+        </p>
+      </GlassPanel>
+    )
+  }
+
   if (!auth.hasRole(allowedRoles)) {
     if (previewMode || allowPreview) {
       return (
@@ -120,6 +189,42 @@ export const RoleGate = ({ allowedRoles, headline, description, previewMode = fa
         </p>
       </GlassPanel>
     )
+  }
+
+  if (requireProfile) {
+    if (profileLoading) {
+      return (
+        <GlassPanel className="p-6 text-center">
+          <p className="font-heading text-sm uppercase tracking-[0.35em] text-horizon/80">Loading profile</p>
+          <p className="mt-3 text-sm text-midnight/70">One moment while we verify your contact details.</p>
+        </GlassPanel>
+      )
+    }
+    const authPhoneNumber = auth.user?.phoneNumber ?? null
+    const phoneConfirmed =
+      authPhoneNumber
+        ? true
+        : typeof profile?.phoneVerified === "boolean"
+          ? profile.phoneVerified
+          : Boolean(profile?.phoneVerifiedAt)
+    const hasPhone = profile?.phone ?? authPhoneNumber
+    const profileComplete = Boolean(hasPhone && profile?.roleRequest && phoneConfirmed)
+    if (!profileComplete) {
+      return (
+        <GlassPanel className="p-6 text-center">
+          <p className="font-heading text-base uppercase tracking-[0.32em] text-horizon">Update required</p>
+          <p className="mt-3 text-sm text-midnight">
+            Add your contact phone number and access request to continue. This helps dispatch route you to the right portal.
+          </p>
+          <button
+            onClick={() => navigate({ to: "/auth/profile", search: { redirect: currentPath } })}
+            className="mt-4 inline-flex items-center justify-center rounded-full border border-horizon/40 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:bg-horizon hover:text-white"
+          >
+            Complete profile
+          </button>
+        </GlassPanel>
+      )
+    }
   }
 
   return <>{children}</>

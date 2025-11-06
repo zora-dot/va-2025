@@ -12,8 +12,8 @@ export const BookingPage = () => {
           Schedule your shuttle
         </h1>
         <p className="mt-3 max-w-2xl text-sm text-midnight/75">
-          Build your itinerary, review pricing in real time, and finalize secure payment once Square
-          integration is activated. Dispatch receives every detail instantly.
+          Build your itinerary, review pricing in real time, and finalize secure payment via Square Payment Provider.
+          Dispatch receives every detail once you submit the form.
         </p>
       </GlassPanel>
       <BookingWizard />

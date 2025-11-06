@@ -8,16 +8,30 @@ import {
   type PropsWithChildren,
 } from "react"
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
-  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   type User,
+  GoogleAuthProvider,
+  OAuthProvider,
+  signInWithPopup,
+  sendSignInLinkToEmail,
+  EmailAuthProvider,
+  linkWithCredential,
+  updatePassword,
 } from "firebase/auth"
+import { FirebaseError } from "firebase/app"
 import { useFirebaseServices } from "@/app/providers/FirebaseContext"
 import type { AppUserRole, AuthContextValue } from "@/lib/types/auth"
 import { env } from "@/lib/config/env"
+
+const defaultRoles: AppUserRole[] = ["guest"]
+
+export const MAGIC_LINK_EMAIL_KEY = "va.magicLinkEmail"
+export const MAGIC_LINK_REDIRECT_KEY = "va.magicLinkRedirect"
+export const MAGIC_LINK_PASSWORD_REQUIRED_KEY = "va.magicLinkRequirePassword"
+
+const AuthContext = createContext<AuthContextValue | null>(null)
 
 if (import.meta.env.PROD) {
   console.log("Firebase env check →", {
@@ -28,10 +42,6 @@ if (import.meta.env.PROD) {
     enabled: env.runtime.firebaseEnabled,
   })
 }
-
-const defaultRoles: AppUserRole[] = ["guest"]
-
-const AuthContext = createContext<AuthContextValue | null>(null)
 
 const deriveRoles = (user: User | null, claimsRoles?: unknown): AppUserRole[] => {
   if (!user) {
@@ -48,6 +58,29 @@ const deriveRoles = (user: User | null, claimsRoles?: unknown): AppUserRole[] =>
   }
 
   return ["customer"]
+}
+
+const sanitizeRedirectTarget = (raw?: string | null): string | null => {
+  if (!raw) return null
+  let current = raw
+  let safety = 0
+  while (current.startsWith("/auth") && safety < 4) {
+    const queryIndex = current.indexOf("?")
+    if (queryIndex === -1) break
+    const params = new URLSearchParams(current.slice(queryIndex + 1))
+    const nested = params.get("redirect")
+    if (!nested) break
+    try {
+      current = decodeURIComponent(nested)
+    } catch {
+      current = nested
+    }
+    safety += 1
+  }
+  if (!current.startsWith("/")) {
+    return "/booking"
+  }
+  return current
 }
 
 export const AuthProvider = ({ children }: PropsWithChildren) => {
@@ -89,7 +122,6 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     })
 
     return () => unsubscribe()
-    return () => unsubscribe()
   }, [firebase])
 
   const signIn = useCallback(
@@ -102,13 +134,37 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     [firebase],
   )
 
-  const signUp = useCallback(
-    async (email: string, password: string) => {
+  const requestMagicLink = useCallback(
+    async (email: string, redirect?: string | null) => {
       if (!firebase.enabled || !firebase.auth) {
         throw new Error("Firebase authentication is not configured.")
       }
-      const credential = await createUserWithEmailAndPassword(firebase.auth, email, password)
-      await sendEmailVerification(credential.user)
+      const trimmedEmail = email.trim()
+      if (!trimmedEmail) {
+        throw new Error("Enter your email address.")
+      }
+      const safeRedirect = sanitizeRedirectTarget(redirect) ?? "/booking"
+      const target = new URL("/auth/magic-link", window.location.origin)
+      if (safeRedirect && safeRedirect !== "undefined") {
+        target.searchParams.set("redirect", safeRedirect)
+      }
+      target.searchParams.set("requirePassword", "1")
+      const actionCodeSettings = {
+        url: target.toString(),
+        handleCodeInApp: true,
+      }
+      await sendSignInLinkToEmail(firebase.auth, trimmedEmail, actionCodeSettings)
+      try {
+        window.localStorage.setItem(MAGIC_LINK_EMAIL_KEY, trimmedEmail)
+        if (safeRedirect && safeRedirect !== "undefined") {
+          window.localStorage.setItem(MAGIC_LINK_REDIRECT_KEY, safeRedirect)
+        } else {
+          window.localStorage.removeItem(MAGIC_LINK_REDIRECT_KEY)
+        }
+        window.localStorage.setItem(MAGIC_LINK_PASSWORD_REQUIRED_KEY, "true")
+      } catch (error) {
+        console.warn("Unable to persist magic link metadata", error)
+      }
     },
     [firebase],
   )
@@ -120,13 +176,87 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     await firebaseSignOut(firebase.auth)
   }, [firebase])
 
-  const sendVerificationEmail = useCallback(async () => {
-    if (!firebase.enabled || !firebase.auth?.currentUser) return
-    await sendEmailVerification(firebase.auth.currentUser, {
-      url: window.location.origin,
-      handleCodeInApp: true,
-    })
+  const signInWithGoogle = useCallback(async () => {
+    if (!firebase.enabled || !firebase.auth) {
+      throw new Error("Firebase authentication is not configured.")
+    }
+    const provider = new GoogleAuthProvider()
+    provider.setCustomParameters({ prompt: "select_account" })
+    await signInWithPopup(firebase.auth, provider)
   }, [firebase])
+
+  const signInWithApple = useCallback(async () => {
+    if (!firebase.enabled || !firebase.auth) {
+      throw new Error("Firebase authentication is not configured.")
+    }
+    const provider = new OAuthProvider("apple.com")
+    provider.addScope("email")
+    provider.addScope("name")
+    await signInWithPopup(firebase.auth, provider)
+  }, [firebase])
+
+  const refreshUser = useCallback(async () => {
+    if (!firebase.enabled || !firebase.auth) {
+      setUser(null)
+      setRoles(defaultRoles)
+      setIsEmailVerified(false)
+      return false
+    }
+    const current = firebase.auth.currentUser
+    if (!current) {
+      setUser(null)
+      setRoles(defaultRoles)
+      setIsEmailVerified(false)
+      return false
+    }
+    await current.reload()
+    setUser(current)
+    try {
+      const tokenResult = await current.getIdTokenResult(true)
+      const claimRoles = tokenResult.claims.roles
+      setRoles(deriveRoles(current, claimRoles))
+      setIsEmailVerified(current.emailVerified)
+    } catch (error) {
+      console.error("Failed to refresh user claims", error)
+      setRoles(deriveRoles(current))
+      setIsEmailVerified(current.emailVerified)
+    }
+    return current.emailVerified
+  }, [firebase])
+
+  const linkPassword = useCallback(
+    async (password: string) => {
+      if (!firebase.enabled || !firebase.auth?.currentUser) {
+        throw new Error("You need to be signed in to set a password.")
+      }
+      const current = firebase.auth.currentUser
+      if (!current?.email) {
+        throw new Error("Your account is missing an email address.")
+      }
+      const credential = EmailAuthProvider.credential(current.email, password)
+      try {
+        await linkWithCredential(current, credential)
+      } catch (error) {
+        if (error instanceof FirebaseError && error.code === "auth/provider-already-linked") {
+          await updatePassword(current, password)
+        } else {
+          throw error
+        }
+      }
+      try {
+        window.localStorage.removeItem(MAGIC_LINK_PASSWORD_REQUIRED_KEY)
+      } catch {
+        /* noop */
+      }
+      await refreshUser()
+    },
+    [firebase, refreshUser],
+  )
+
+  const hasPasswordProvider = useMemo(
+    () => Boolean(user?.providerData?.some((provider) => provider.providerId === "password")),
+    [user],
+  )
 
   const value: AuthContextValue = useMemo(
     () => ({
@@ -136,15 +266,32 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       primaryRole: roles[0] ?? "guest",
       isEmailVerified,
       signIn,
-      signUp,
+      requestMagicLink,
+      signInWithGoogle,
+      signInWithApple,
       signOut,
-      sendVerificationEmail,
+      refreshUser,
+      linkPassword,
+      hasPasswordProvider,
       hasRole: (role) => {
         const targets = Array.isArray(role) ? role : [role]
         return roles.some((r) => targets.includes(r))
       },
     }),
-    [user, loading, roles, isEmailVerified, signIn, signUp, signOut, sendVerificationEmail],
+    [
+      user,
+      loading,
+      roles,
+      isEmailVerified,
+      signIn,
+      requestMagicLink,
+      signInWithGoogle,
+      signInWithApple,
+      signOut,
+      refreshUser,
+      linkPassword,
+      hasPasswordProvider,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

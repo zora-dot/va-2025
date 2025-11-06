@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 422" role="img" aria-labelledby="title">
+  <title id="title">Five star rating banner</title>
+  <rect width="2048" height="422" fill="#0b1f36" opacity="0"/>
+  <g transform="translate(0,11)" fill="none" stroke="#f59e0b" stroke-width="14" stroke-linejoin="round">
+    <path d="M165 200 214 350 80 255h170L116 350z" fill="#f59e0b"/>
+    <path d="M573 200 622 350 488 255h170L524 350z" fill="#f59e0b"/>
+    <path d="M981 200 1030 350 896 255h170L932 350z" fill="#f59e0b"/>
+    <path d="M1389 200 1438 350 1304 255h170L1340 350z" fill="#f59e0b"/>
+    <path d="M1797 200 1846 350 1712 255h170L1751 350z" fill="#f59e0b"/>
+  </g>
+</svg>

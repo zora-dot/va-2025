@@ -32,7 +32,10 @@ export const MessagingInbox = ({ role }: MessagingInboxProps) => {
   const threads = useMemo<MessageThread[]>(() => messagingMockThreads[role] ?? [], [role])
   const [activeThreadId, setActiveThreadId] = useState<string>(threads[0]?.id ?? "")
 
-  const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? threads[0]
+  const activeThread = useMemo(
+    () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0],
+    [threads, activeThreadId],
+  )
 
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">

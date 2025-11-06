@@ -1,9 +1,158 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+
+    function isSignedIn() { return request.auth != null; }
+    function isSelf(uid)  { return isSignedIn() && request.auth.uid == uid; }
+    function isAdmin() {
+      return isSignedIn()
+        && (request.auth.token.admin == true || request.auth.token.role == 'admin');
+    }
+    function normalizedEmail(email) {
+      return email == null ? null : email.lower();
+    }
+    function phoneLookupKeys() {
+      return (!isSignedIn() || request.auth.token.phone_number == null)
+        ? []
+        : ['phone:' + request.auth.token.phone_number]
+          .concat(phoneLookupKeysWithoutPlus(request.auth.token.phone_number))
+          .concat(phoneLookupKeysWithoutCountryCode(request.auth.token.phone_number));
+    }
+    function phoneLookupKeysWithoutPlus(phone) {
+      return (phone.size() > 0 && phone.charAt(0) == '+')
+        ? ['phone:' + phone.substring(1, phone.size())]
+        : [];
+    }
+    function phoneLookupKeysWithoutCountryCode(phone) {
+      return (phone.size() > 2 && phone.substring(0, 2) == '+1')
+        ? ['phone:' + phone.substring(2, phone.size())]
+        : (phone.size() == 11 && phone.charAt(0) == '1')
+          ? ['phone:' + phone.substring(1, phone.size())]
+          : [];
+    }
+    function allowedLookupKeys() {
+      return !isSignedIn()
+        ? []
+        : (request.auth.token.email != null
+          ? ['uid:' + request.auth.uid, 'email:' + request.auth.token.email.lower()]
+          : ['uid:' + request.auth.uid])
+            .concat(phoneLookupKeys());
+    }
+    function hasBookingAccess(resource) {
+      return isAdmin()
+        || (isSignedIn()
+          && (
+            (resource.data.lookupKeys != null
+              && allowedLookupKeys().size() > 0
+              && resource.data.lookupKeys.hasAny(allowedLookupKeys()))
+            || (resource.data.user.uid == request.auth.uid)
+            || (resource.data.assignment is map
+              && resource.data.assignment.driverId == request.auth.uid)
+            || (request.auth.token.email != null
+              && resource.data.user.email != null
+              && normalizedEmail(resource.data.user.email) == request.auth.token.email.lower())
+            || (request.auth.token.email != null
+              && resource.data.passenger.email != null
+              && normalizedEmail(resource.data.passenger.email) == request.auth.token.email.lower())
+          ));
+    }
+
+    // --- Driver inspections ---
+    match /driver_inspections/{docId} {
+      // Read if admin or the document belongs to the signed-in driver
+      allow read: if isAdmin() || (isSignedIn() && resource.data.driverId == request.auth.uid);
+
+      // Create if admin or creating for yourself
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.driverId == request.auth.uid);
+
+      // Update/Delete if admin or owner, and driverId is immutable
+      allow update, delete: if isAdmin() ||
+        (isSignedIn()
+          && resource.data.driverId == request.auth.uid
+          && request.resource.data.driverId == resource.data.driverId);
+    }
+
+    // --- User profile root ---
+    match /users/{uid} {
+      allow read, write: if isAdmin() || isSelf(uid);
+    }
+
+    function isQuoteOwner(quoteData) {
+      return isSignedIn()
+        && quoteData.createdBy is map
+        && quoteData.createdBy.uid is string
+        && quoteData.createdBy.uid == request.auth.uid;
+    }
+
+    // --- Quotes ---
+    match /quotes/{quoteId} {
+      allow get: if isAdmin() || (resource.data != null && isQuoteOwner(resource.data));
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
+
+      match /pii/{docId} {
+        allow get: if isAdmin()
+          || (get(/databases/$(database)/documents/quotes/$(quoteId)).data != null
+            && isQuoteOwner(get(/databases/$(database)/documents/quotes/$(quoteId)).data));
+        allow list: if false;
+        allow create, update, delete: if false;
+      }
+
+      match /passengers/{passengerId} {
+        allow get: if isAdmin()
+          || (get(/databases/$(database)/documents/quotes/$(quoteId)).data != null
+            && isQuoteOwner(get(/databases/$(database)/documents/quotes/$(quoteId)).data));
+        allow list: if false;
+        allow create, update, delete: if false;
+      }
+    }
+
+    // --- Bookings ---
+    match /bookings/{bookingId} {
+      allow get: if hasBookingAccess(resource);
+      allow list: if isAdmin()
+        || (isSignedIn()
+          && request.query != null
+          && allowedLookupKeys().size() > 0
+          && request.query.hasAny(['lookupKeys'], allowedLookupKeys()));
+    }
+    match /{path=**}/bookings/{bookingId} {
+      allow get: if hasBookingAccess(resource);
+      allow list: if isAdmin()
+        || (isSignedIn()
+          && request.query != null
+          && allowedLookupKeys().size() > 0
+          && request.query.hasAny(['lookupKeys'], allowedLookupKeys()));
+    }
+
+    // --- Customer profile: preferences & notifications ---
+    match /customers/{uid}/profile/{docName} {
+      allow read, write: if isAdmin() || isSelf(uid);
+    }
+
+    // --- Customer documents metadata ---
+    match /customers/{uid}/documents/{docId} {
+      allow read, write: if isAdmin() || isSelf(uid);
+    }
+
+    // --- Customer booking mirrors ---
+    match /customers/{uid}/bookings/{bookingId} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // --- SMS infrastructure ---
+    match /sms_outbound/{docId} {
       allow read, write: if false;
+    }
+
+    match /smsInboundSessions/{docId} {
+      allow read, write: if false;
+    }
+
+    // --- Admin alerts matrix ---
+    match /admin/config/settings/alerts {
+      allow read, write: if isAdmin();
     }
   }
 }

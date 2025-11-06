@@ -1,5 +1,6 @@
 
 import { GlassPanel } from "@/components/ui/GlassPanel"
+import { ResponsiveImage } from "@/components/ui/ResponsiveImage"
 import { reviews } from "@/data/reviews"
 import { Star } from "lucide-react"
 
@@ -10,6 +11,7 @@ const reviewColors = [
 ]
 
 export const ReviewsPage = () => {
+  const totalReviews = reviews.length
   return (
     <div className="flex flex-col gap-6 pb-16">
       <GlassPanel className="grid gap-6 p-7 lg:grid-cols-[1fr_280px]">
@@ -25,33 +27,47 @@ export const ReviewsPage = () => {
             Every testimonial here is copied directly from the Valley Airporter review archive. Scroll to experience the voice of over 150 travellers.
           </p>
         </div>
-        <img
-          src="https://images.unsplash.com/photo-1511288597080-488ef2b1a661?auto=format&fit=crop&w=900&q=80"
-          alt="Happy travellers ready for shuttle"
-          className="h-44 w-full rounded-3xl object-cover shadow-lg"
-          loading="lazy"
+        <ResponsiveImage
+          src="https://i.postimg.cc/VkwVqBNK/5-stars-transparent.png"
+          alt="Row of five gold stars"
+          className="h-44 w-full rounded-3xl object-contain bg-white/80 p-4 shadow-lg"
+          sources={[
+            {
+              srcSet: "https://i.postimg.cc/VkwVqBNK/5-stars-transparent.png",
+              type: "image/png",
+              media: "(max-width: 768px)",
+            },
+          ]}
         />
       </GlassPanel>
       <div className="grid gap-6">
-        {reviews.map((review, index) => (
-          <GlassPanel
-            key={`${review.author}-${index}`}
-            className={`flex h-full flex-col justify-between gap-6 p-6 ${reviewColors[index % reviewColors.length]}`}
-          >
-            <div className="flex flex-wrap items-center gap-2 text-horizon">
-              {Array.from({ length: 5 }).map((_, starIndex) => (
-                <Star key={starIndex} className="h-5 w-5 fill-current text-horizon" />
-              ))}
-              <span className="text-base font-semibold uppercase tracking-[0.28em] text-horizon/80">
-                Rated 5 Stars on Google
-              </span>
-            </div>
-            <p className="text-base leading-relaxed text-midnight/80">{review.quote}</p>
-            <p className="text-base font-semibold uppercase tracking-[0.28em] text-horizon/80">
-              by {review.author || "Anonymous"}
-            </p>
-          </GlassPanel>
-        ))}
+        {reviews.map((review, index) => {
+          const reviewNumber = totalReviews - index
+          return (
+            <GlassPanel
+              key={`${review.author}-${index}`}
+              className={`flex h-full flex-col justify-between gap-6 p-6 ${reviewColors[index % reviewColors.length]}`}
+            >
+              <div className="flex flex-wrap items-center gap-3 text-horizon">
+                <span className="text-lg font-semibold tracking-[0.2em] text-horizon/80">
+                  #{reviewNumber}
+                </span>
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: 5 }).map((_, starIndex) => (
+                    <Star key={starIndex} className="h-5 w-5 fill-current text-horizon" />
+                  ))}
+                  <span className="text-base font-semibold uppercase tracking-[0.28em] text-horizon/80">
+                    Rated 5 Stars on Google
+                  </span>
+                </div>
+              </div>
+              <p className="text-base leading-relaxed text-midnight/80">{review.quote}</p>
+              <p className="text-base font-semibold uppercase tracking-[0.28em] text-horizon/80">
+                by {review.author || "Anonymous"}
+              </p>
+            </GlassPanel>
+          )
+        })}
       </div>
     </div>
   )

@@ -4,18 +4,20 @@ export default {
   theme: {
     extend: {
       colors: {
-        midnight: "#0b1d3a",
-        horizon: "#123666",
-        glacier: "#4ab6ff",
-        aurora: "#8b5cf6",
-        ember: "#ff4d6d",
-        sunrise: "#ffd27f",
-        frost: "rgba(255,255,255,0.14)",
-        "frost-strong": "rgba(255,255,255,0.24)",
+        midnight: "#0b1f36", // deep navy
+        horizon: "#1f5aa8", // brand blue
+        sky: "#6fbfff", // bright sky blue
+        glacier: "#a6c9ff", // pale blue
+        mist: "#f0f5ff", // soft background
+        slate: "#4c607a", // muted text
+        cloud: "#dde8ff", // neutral panel
+        ember: "#305bad", // alerts (cool blue)
+        frost: "rgba(255,255,255,0.16)",
+        "frost-strong": "rgba(255,255,255,0.28)",
       },
       fontFamily: {
-        sans: ['"Inter"', "system-ui", "sans-serif"],
-        heading: ['"Saira Condensed"', "system-ui", "sans-serif"],
+        sans: ['"Calibri"', '"Segoe UI"', "system-ui", "sans-serif"],
+        heading: ['"Calibri"', '"Segoe UI"', "system-ui", "sans-serif"],
       },
       boxShadow: {
         glow: "0 20px 45px -20px rgba(36, 180, 255, 0.45)",
@@ -23,10 +25,18 @@ export default {
       },
       borderRadius: {
         glass: "24px",
+        pill: "999px",
+        xl: "18px",
       },
       backdropBlur: {
         xl: "24px",
         "2xl": "36px",
+      },
+      spacing: {
+        15: "3.75rem",
+      },
+      transitionTimingFunction: {
+        "out-soft": "cubic-bezier(0.22, 1, 0.36, 1)",
       },
     },
   },

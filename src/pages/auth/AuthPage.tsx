@@ -1,46 +1,102 @@
-import { useState, type InputHTMLAttributes } from "react"
+import { useCallback, useEffect, useState, type InputHTMLAttributes } from "react"
 import { GlassPanel } from "@/components/ui/GlassPanel"
-import { z, type ZodType } from "zod"
+import { z } from "zod"
 import { useForm, type UseFormRegister } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useNavigate, useSearch } from "@tanstack/react-router"
 import { clsx } from "clsx"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, SendHorizontal } from "lucide-react"
 
-const baseSchema = z.object({
+const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 })
 
-type FormValues = z.infer<typeof baseSchema> & { confirmPassword?: string }
-
-const loginSchema: ZodType<FormValues> = baseSchema.extend({
-  confirmPassword: z.string().optional(),
+const registerSchema = z.object({
+  email: z.string().email("Enter a valid email"),
 })
 
-const registerSchema: ZodType<FormValues> = baseSchema
-  .extend({
-    confirmPassword: z.string().min(1, "Confirm your password"),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords must match",
-    path: ["confirmPassword"],
-  })
+type FormValues = { email: string; password?: string }
 
 type AuthMode = "login" | "register"
+
+const resolveAuthErrorMessage = (error: unknown, fallback: string) => {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = String((error as { code?: string }).code)
+    switch (code) {
+      case "auth/operation-not-allowed":
+        return "Magic link sign-in isn't enabled for this project. Ask the admin to enable Email Link sign-in in Firebase."
+      case "auth/invalid-email":
+        return "Enter a valid email address."
+      case "auth/missing-email":
+        return "Add your email before requesting a link."
+      case "auth/too-many-requests":
+        return "Too many requests. Wait a moment and try again."
+      default:
+        break
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
+}
 
 export const AuthPage = () => {
   const [mode, setMode] = useState<AuthMode>("login")
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [magicLinkSent, setMagicLinkSent] = useState(false)
+  const [resendCountdown, setResendCountdown] = useState<number | null>(null)
   const auth = useAuth()
   const navigate = useNavigate()
   const search = useSearch({ strict: false }) as { redirect?: string | string[] }
 
   const schema = mode === "login" ? loginSchema : registerSchema
+
+  useEffect(() => {
+    if (resendCountdown === null) return
+    if (resendCountdown <= 0) {
+      setResendCountdown(null)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setResendCountdown((previous) => (previous == null ? null : previous - 1))
+    }, 1000)
+    return () => window.clearTimeout(timer)
+  }, [resendCountdown])
+
+  const determineNextRoute = useCallback(() => {
+    const rawRedirect = search?.redirect
+    let next: string | undefined
+    if (typeof rawRedirect === "string" && rawRedirect.trim()) {
+      next = rawRedirect
+    } else if (Array.isArray(rawRedirect)) {
+      next = rawRedirect.find(Boolean)
+    }
+
+    if (!next) {
+      const role = auth.primaryRole
+      if (role === "admin") return "/portal/admin"
+      if (role === "driver") return "/portal/driver"
+      return "/portal/customer"
+    }
+
+    return next
+  }, [auth.primaryRole, search])
+
+  const navigateTo = useCallback(
+    (next: string) => {
+      if (next.startsWith("http")) {
+        window.location.assign(next)
+      } else {
+        navigate({ to: next as unknown as never })
+      }
+    },
+    [navigate],
+  )
 
   const form = useForm<FormValues>({
     // zodResolver typing struggles with dynamic schemas; safe to cast here for now.
@@ -49,7 +105,6 @@ export const AuthPage = () => {
     defaultValues: {
       email: "",
       password: "",
-      confirmPassword: "",
     },
   })
 
@@ -57,6 +112,8 @@ export const AuthPage = () => {
     if (nextMode !== mode) {
       setMode(nextMode)
       setError(null)
+      setMagicLinkSent(false)
+      setResendCountdown(null)
       form.reset()
     }
   }
@@ -65,42 +122,59 @@ export const AuthPage = () => {
     setPending(true)
     setError(null)
     try {
+      const next = determineNextRoute()
       if (mode === "login") {
-        await auth.signIn(values.email, values.password)
-      } else {
-        await auth.signUp(values.email, values.password)
-      }
-      const rawRedirect = search?.redirect
-      let next: string | undefined
-      if (typeof rawRedirect === "string" && rawRedirect.trim()) {
-        next = rawRedirect
-      } else if (Array.isArray(rawRedirect)) {
-        next = rawRedirect.find(Boolean)
-      }
-
-      if (!next) {
-        if (auth.primaryRole === "admin") {
-          next = "/portal/admin"
-        } else if (auth.primaryRole === "driver") {
-          next = "/portal/driver"
-        } else {
-          next = "/portal/customer"
+        if (!values.password) {
+          setError("Enter your password to continue.")
+          return
         }
-      }
-
-      if (next.startsWith("http")) {
-        window.location.assign(next)
+        await auth.signIn(values.email, values.password)
+        await auth.refreshUser()
+        navigateTo(next)
       } else {
-        navigate({ to: next as unknown as never })
+        await auth.requestMagicLink(values.email, next)
+        setMagicLinkSent(true)
+        setResendCountdown(45)
+        form.reset({ email: values.email, password: "" })
+        return
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "There was an issue processing your request.",
-      )
+      setError(resolveAuthErrorMessage(err, "There was an issue processing your request."))
+      setMagicLinkSent(false)
+      setResendCountdown(null)
     } finally {
       setPending(false)
     }
   })
+
+  const handleSocialSignIn = async (provider: "google" | "apple") => {
+    setPending(true)
+    setError(null)
+    try {
+      if (provider === "google") {
+        await auth.signInWithGoogle()
+      } else {
+        await auth.signInWithApple()
+      }
+      await auth.refreshUser()
+      const next = determineNextRoute()
+      if (!auth.hasPasswordProvider) {
+        navigate({
+          to: "/auth/set-password",
+          search: { redirect: next } as never,
+        })
+      } else {
+        navigate({
+          to: "/auth/profile",
+          search: { redirect: next } as never,
+        })
+      }
+    } catch (err) {
+      setError(resolveAuthErrorMessage(err, "Unable to complete social sign-in right now."))
+    } finally {
+      setPending(false)
+    }
+  }
 
   return (
     <div className="flex flex-col items-center gap-8 pb-16">
@@ -146,7 +220,36 @@ export const AuthPage = () => {
           </div>
         </div>
 
-        <form className="mt-8 grid gap-4" onSubmit={onSubmit}>
+        <div className="mt-8 grid gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              void handleSocialSignIn("google")
+            }}
+            disabled={pending}
+            className="flex items-center justify-center gap-3 rounded-full border border-horizon/30 bg-white/80 px-6 py-3 text-sm font-semibold text-midnight transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Continue with Google
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleSocialSignIn("apple")
+            }}
+            disabled={pending}
+            className="flex items-center justify-center gap-3 rounded-full border border-midnight/40 bg-midnight px-6 py-3 text-sm font-semibold text-white transition hover:bg-midnight/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Continue with Apple
+          </button>
+        </div>
+
+        <div className="mt-6 flex items-center gap-3 text-xs uppercase tracking-[0.3em] text-midnight/40">
+          <span className="h-px flex-1 bg-midnight/20" aria-hidden />
+          or
+          <span className="h-px flex-1 bg-midnight/20" aria-hidden />
+        </div>
+
+        <form className="mt-6 grid gap-4" onSubmit={onSubmit}>
           <Field
             label="Email"
             name="email"
@@ -155,44 +258,22 @@ export const AuthPage = () => {
             error={form.formState.errors.email?.message}
             register={form.register}
           />
-          <Field
-            label="Password"
-            name="password"
-            type={showPassword ? "text" : "password"}
-            placeholder="••••••••"
-            error={form.formState.errors.password?.message}
-            register={form.register}
-            renderSuffix={
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-horizon hover:text-midnight"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              </button>
-            }
-          />
-          {mode === "register" ? (
+          {mode === "login" ? (
             <Field
-              label="Confirm Password"
-              name="confirmPassword"
-              type={showConfirmPassword ? "text" : "password"}
+              label="Password"
+              name="password"
+              type={showPassword ? "text" : "password"}
               placeholder="••••••••"
-              error={form.formState.errors.confirmPassword?.message}
+              error={form.formState.errors.password?.message}
               register={form.register}
               renderSuffix={
                 <button
                   type="button"
-                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  onClick={() => setShowPassword((prev) => !prev)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-horizon hover:text-midnight"
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               }
             />
@@ -202,40 +283,43 @@ export const AuthPage = () => {
 
           <button
             type="submit"
-            disabled={pending}
+            disabled={
+              pending ||
+              (mode === "register" && (resendCountdown ?? 0) > 0)
+            }
             className="mt-4 flex h-12 items-center justify-center rounded-full border border-horizon/50 bg-horizon px-6 font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {pending ? "Processing..." : mode === "login" ? "Sign In" : "Create Account"}
+            {pending
+              ? "Processing..."
+              : mode === "login"
+                ? "Sign In"
+                : (resendCountdown ?? 0) > 0
+                  ? `Resend in ${resendCountdown}s`
+                  : magicLinkSent
+                    ? "Send Again"
+                    : "Email Me a Link"}
           </button>
         </form>
 
-        {mode === "login" && !auth.isEmailVerified && auth.user ? (
-          <div className="mt-6 rounded-2xl border border-sunrise/60 bg-sunrise/40 p-4 text-sm text-midnight/80">
-            <p className="font-semibold text-midnight">Verify your email</p>
-            <p className="mt-2">
-              We&apos;ve sent a verification link to <strong>{auth.user.email}</strong>. Once
-              verified, refresh or sign in again to access all features.
+        {mode === "register" ? (
+          <div className="mt-6 rounded-2xl border border-horizon/20 bg-white/70 px-4 py-4 text-sm text-midnight/75">
+            <p className="font-semibold text-midnight">How it works</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-midnight/80">
+              <li>Enter your email and we&apos;ll send a secure one-time sign-in link.</li>
+              <li>Open the link to get instant access to your Valley Airporter portal.</li>
+              <li>We&apos;ll ask you to set a password right after you arrive.</li>
+            </ul>
+            <p className="mt-3 text-xs text-midnight/60">
+              Please check your junk or spam folder if the email doesn&apos;t arrive in your inbox within a minute.
             </p>
-            <button
-              type="button"
-              onClick={async () => {
-                setPending(true)
-                try {
-                  await auth.sendVerificationEmail()
-                } catch (err) {
-                  setError(
-                    err instanceof Error
-                      ? err.message
-                      : "Unable to send verification email right now.",
-                  )
-                } finally {
-                  setPending(false)
-                }
-              }}
-              className="mt-3 inline-flex items-center justify-center rounded-full border border-white/60 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-horizon transition hover:bg-white"
-            >
-              Resend Verification
-            </button>
+            {magicLinkSent ? (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-horizon/30 bg-horizon/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-horizon">
+                <SendHorizontal className="h-4 w-4" aria-hidden />
+                {(resendCountdown ?? 0) > 0
+                  ? `Link sent! You can resend in ${resendCountdown}s.`
+                  : "Link sent! Check your inbox."}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </GlassPanel>

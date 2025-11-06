@@ -2,6 +2,10 @@ scripts:
   buildCommand: npm run build
   runCommand: npm start
 
+build:
+  env:
+    - key: VITE_GOOGLE_MAPS_BROWSER_KEY
+      value: AIzaSyD0Ts3v1RTkbbJMXXRVL5-x1xjYy71CXV0
 run:
   env:
     - key: VITE_FIREBASE_API_KEY

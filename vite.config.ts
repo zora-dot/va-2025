@@ -9,6 +9,35 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      workbox: {
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.destination === "image",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "va-images",
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /\/api\/.*$/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "va-api",
+              networkTimeoutSeconds: 5,
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+      },
       manifest: {
         name: "Valley Airporter Shuttle",
         short_name: "Valley Shuttle",
@@ -42,5 +71,28 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "src")
     }
+  },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("firebase")) {
+              return "firebase"
+            }
+            if (id.includes("@tanstack")) {
+              return "tanstack"
+            }
+            if (id.includes("date-fns")) {
+              return "date-fns"
+            }
+            if (id.includes("lucide-react")) {
+              return "icons"
+            }
+          }
+        },
+      },
+    },
   }
 })

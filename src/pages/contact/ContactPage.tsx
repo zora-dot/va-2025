@@ -1,11 +1,12 @@
 import { useState } from "react"
+import { useNavigate } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { addDoc, collection, serverTimestamp } from "firebase/firestore"
 import { GlassPanel } from "@/components/ui/GlassPanel"
+import { ResponsiveImage } from "@/components/ui/ResponsiveImage"
 import { MapPin, Phone, Mail, Clock, Send } from "lucide-react"
-import { useFirebaseServices } from "@/app/providers/FirebaseContext"
+import { callFunction } from "@/lib/api/client"
 
 const contactSchema = z.object({
   fullName: z.string().min(2, "Enter your name"),
@@ -20,7 +21,7 @@ type ContactFormValues = z.infer<typeof contactSchema>
 export const ContactPage = () => {
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const { firestore, enabled } = useFirebaseServices()
+  const navigate = useNavigate()
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(contactSchema),
     defaultValues: {
@@ -37,18 +38,14 @@ export const ContactPage = () => {
       setStatus("submitting")
       setSubmitError(null)
 
-      if (!enabled || !firestore) {
-        throw new Error("Firebase is not configured. Unable to submit contact request.")
-      }
-
-      await addDoc(collection(firestore, "contactMessages"), {
-        ...values,
-        status: "new",
-        createdAt: serverTimestamp(),
+      await callFunction<{ ok: boolean }>("submitContactMessage", {
+        method: "POST",
+        body: values,
       })
 
       setStatus("success")
       form.reset()
+      navigate({ to: "/thank-you" })
     } catch (error) {
       console.error(error)
       setSubmitError(
@@ -75,20 +72,32 @@ export const ContactPage = () => {
             around the clock. Use the form below or call/text for same-day travel.
           </p>
         </div>
-        <img
+        <ResponsiveImage
           src="https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=720&q=80"
           alt="Valley Airporter shuttle ready for departure"
           className="h-44 w-full rounded-3xl object-cover shadow-lg"
-          loading="lazy"
+          sources={[
+            {
+              srcSet: "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=600&q=75&fm=webp",
+              type: "image/webp",
+              media: "(max-width: 768px)",
+            },
+          ]}
         />
       </GlassPanel>
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <GlassPanel className="grid gap-6 p-6">
-          <img
+          <ResponsiveImage
             src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80"
             alt="Map showing Fraser Valley routes"
             className="h-40 w-full rounded-3xl object-cover shadow"
-            loading="lazy"
+            sources={[
+              {
+                srcSet: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=640&q=75&fm=webp",
+                type: "image/webp",
+                media: "(max-width: 768px)",
+              },
+            ]}
           />
           <div className="grid gap-4 sm:grid-cols-2">
             <ContactDetail

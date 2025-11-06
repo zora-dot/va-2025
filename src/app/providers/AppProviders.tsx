@@ -7,6 +7,7 @@ import {
 import { type PropsWithChildren, useState } from "react"
 import { FirebaseProvider, useFirebaseServices } from "@/app/providers/FirebaseContext"
 import { AuthProvider, useAuthContext } from "@/app/providers/AuthProvider"
+import { ToastProvider } from "@/components/ui/ToastProvider"
 
 const queryClientOptions: DefaultOptions = {
   queries: {
@@ -29,7 +30,9 @@ export const AppProviders = ({ router }: AppProvidersProps) => {
     <FirebaseProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <RouterBridge router={router} />
+          <ToastProvider>
+            <RouterBridge router={router} />
+          </ToastProvider>
         </AuthProvider>
       </QueryClientProvider>
     </FirebaseProvider>

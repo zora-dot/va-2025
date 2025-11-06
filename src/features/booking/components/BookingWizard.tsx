@@ -151,10 +151,11 @@ type ScheduleData = {
   returnPickupTime?: string
 }
 
-type StepKey = 0 | 1 | 2 | 3
+type StepKey = 0 | 1 | 2 | 3 | 4
 
 export const BookingWizard = () => {
   const [step, setStep] = useState<StepKey>(0)
+  const [maxStepReached, setMaxStepReached] = useState<StepKey>(0)
   const [tripData, setTripData] = useState<TripData | null>(null)
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null)
   const [passengerData, setPassengerData] = useState<PassengerForm | null>(null)
@@ -302,7 +303,7 @@ export const BookingWizard = () => {
     }
 
     setTripData(payload)
-    setStep(1)
+    goToStep(1)
   })
 
   const handleScheduleSubmit = scheduleForm.handleSubmit((values: ScheduleForm) => {
@@ -340,12 +341,12 @@ export const BookingWizard = () => {
     }
 
     setScheduleData(schedule)
-    setStep(2)
+    goToStep(3)
   })
 
   const handlePassengerSubmit = passengerForm.handleSubmit((values: PassengerForm) => {
     setPassengerData(values)
-    setStep(3)
+    goToStep(4)
   })
 
   const handleConfirm = useCallback(async () => {
@@ -427,6 +428,17 @@ export const BookingWizard = () => {
     tripData,
   ])
 
+  const goToStep = useCallback(
+    (next: StepKey, options?: { reset?: boolean }) => {
+      setStep(next)
+      setMaxStepReached((prev) => {
+        if (options?.reset) return next
+        return next > prev ? next : prev
+      })
+    },
+    [],
+  )
+
   const resetWizard = useCallback(() => {
     tripForm.reset({
       direction: directionOptions[0],
@@ -451,8 +463,8 @@ export const BookingWizard = () => {
     setSubmitted(false)
     setSubmittingBooking(false)
     setSubmitError(null)
-    setStep(0)
-  }, [passengerForm, scheduleForm, tripForm])
+    goToStep(0, { reset: true })
+  }, [goToStep, passengerForm, scheduleForm, tripForm])
 
   const directionValue = tripForm.watch("direction") ?? directionOptions[0]
   const originValue = tripForm.watch("origin")
@@ -491,9 +503,40 @@ export const BookingWizard = () => {
     return list
   }, [destinations])
 
+  const estimatedQuote = useMemo(() => {
+    if (!tripData || !pricing || pricing.baseRate == null) {
+      return null
+    }
+    const baseRate = pricing.baseRate
+    const baseFare =
+      (pricing.ratesTable && typeof pricing.ratesTable["1"] === "number" ?
+        Math.round(pricing.ratesTable["1"]) :
+        baseRate) ?? baseRate
+    const extraPassengers = Math.max(0, tripData.passengerCount - 1)
+    const extraPassengerTotal = Math.max(0, baseRate - baseFare)
+    const perPassenger =
+      extraPassengers > 0 ? Math.max(0, Math.round((extraPassengerTotal / extraPassengers) * 100) / 100) : 0
+    const estimatedGst = Math.round(baseRate * 0.05 * 100) / 100
+    return {
+      baseRate,
+      baseFare,
+      extraPassengers,
+      extraPassengerTotal,
+      perPassenger,
+      estimatedGst,
+    }
+  }, [pricing, tripData])
+
   return (
     <div className="flex flex-col gap-6">
-      <StepHeader current={step} />
+      <StepHeader
+        current={step}
+        maxStep={maxStepReached}
+        onSelect={(target) => {
+          if (target > maxStepReached) return
+          goToStep(target)
+        }}
+      />
       {step === 0 ? (
         <TripStep
           form={tripForm}
@@ -503,6 +546,15 @@ export const BookingWizard = () => {
         />
       ) : null}
       {step === 1 && tripData ? (
+        <PriceQuoteStep
+          trip={tripData}
+          pricing={pricing}
+          quote={estimatedQuote}
+          onEditTrip={() => goToStep(0)}
+          onContinue={() => goToStep(2)}
+        />
+      ) : null}
+      {step === 2 && tripData ? (
         <ScheduleStep
           form={scheduleForm}
           onSubmit={handleScheduleSubmit}
@@ -510,8 +562,8 @@ export const BookingWizard = () => {
           direction={tripData.direction}
         />
       ) : null}
-      {step === 2 ? <PassengerStep form={passengerForm} onSubmit={handlePassengerSubmit} /> : null}
-      {step === 3 && tripData && scheduleData && passengerData ? (
+      {step === 3 ? <PassengerStep form={passengerForm} onSubmit={handlePassengerSubmit} /> : null}
+      {step === 4 && tripData && scheduleData && passengerData ? (
         <ReviewStep
           trip={tripData}
           schedule={scheduleData}
@@ -520,7 +572,7 @@ export const BookingWizard = () => {
           submitting={submittingBooking}
           submitted={submitted}
           onConfirm={handleConfirm}
-          onBack={() => setStep(2)}
+          onBack={() => goToStep(3)}
           onReset={resetWizard}
           error={submitError}
         />
@@ -529,29 +581,53 @@ export const BookingWizard = () => {
   )
 }
 
-const StepHeader = ({ current }: { current: StepKey }) => {
-  const steps = ["Trip", "Schedule", "Passengers", "Review"]
+const StepHeader = ({
+  current,
+  maxStep,
+  onSelect,
+}: {
+  current: StepKey
+  maxStep: StepKey
+  onSelect: (step: StepKey) => void
+}) => {
+  const steps: Array<{ label: string }> = [
+    { label: "Trip" },
+    { label: "Price Quote" },
+    { label: "Pickup Schedule" },
+    { label: "Passengers" },
+    { label: "Review" },
+  ]
   return (
     <GlassPanel className="p-4">
       <div className="flex items-center justify-between gap-4">
-        {steps.map((label, index) => (
-          <div key={label} className="flex items-center gap-4">
-            <div
-              className={clsx(
-                "flex items-center gap-2 rounded-full px-4 py-2 text-xs uppercase tracking-[0.3em] transition",
-                index === current
-                  ? "bg-horizon text-white shadow-glow"
-                  : "border border-horizon/30 bg-white/70 text-horizon",
-              )}
-            >
-              <span className="text-[0.65rem]">{String(index + 1).padStart(2, "0")}</span>
-              <span>{label}</span>
+        {steps.map((stepItem, index) => {
+          const stepIndex = index as StepKey
+          const enabled = stepIndex <= maxStep
+          const isActive = stepIndex === current
+          return (
+            <div key={stepItem.label} className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() => (enabled ? onSelect(stepIndex) : undefined)}
+                disabled={!enabled}
+                className={clsx(
+                  "flex items-center gap-2 rounded-full px-4 py-2 text-xs uppercase tracking-[0.3em] transition",
+                  isActive
+                    ? "bg-horizon text-white shadow-glow"
+                    : enabled
+                      ? "border border-horizon/30 bg-white/80 text-horizon hover:border-horizon/50"
+                      : "border border-horizon/20 bg-white/60 text-horizon/40",
+                )}
+              >
+                <span className="text-[0.65rem]">{String(index + 1).padStart(2, "0")}</span>
+                <span>{stepItem.label}</span>
+              </button>
+              {index < steps.length - 1 ? (
+                <span className="hidden h-px w-16 rounded bg-horizon/30 md:block" aria-hidden />
+              ) : null}
             </div>
-            {index < steps.length - 1 ? (
-              <span className="hidden h-px w-16 rounded bg-horizon/30 md:block" aria-hidden />
-            ) : null}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </GlassPanel>
   )
@@ -909,6 +985,133 @@ const TripStep = ({
           </button>
         </div>
       </form>
+    </GlassPanel>
+  )
+}
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("en-CA", {
+    style: "currency",
+    currency: "CAD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+
+const PriceQuoteStep = ({
+  trip,
+  pricing,
+  quote,
+  onEditTrip,
+  onContinue,
+}: {
+  trip: TripData
+  pricing: PricingResult | null
+  quote: {
+    baseRate: number
+    baseFare: number
+    extraPassengers: number
+    extraPassengerTotal: number
+    perPassenger: number
+    estimatedGst: number
+  } | null
+  onEditTrip: () => void
+  onContinue: () => void
+}) => {
+  const quoteAvailable = Boolean(quote && pricing?.baseRate != null)
+  const passengerLabel =
+    trip.passengerCount === 1 ? "1 passenger" : `${trip.passengerCount} passengers`
+
+  return (
+    <GlassPanel className="p-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em] text-horizon">
+          {trip.origin}
+        </span>
+        <span className="text-sm font-semibold text-horizon">→</span>
+        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em] text-horizon">
+          {trip.destination}
+        </span>
+        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em] text-horizon">
+          {passengerLabel}
+        </span>
+        <button
+          type="button"
+          onClick={onEditTrip}
+          className="ml-auto text-xs font-semibold uppercase tracking-[0.3em] text-horizon underline-offset-4 hover:underline"
+        >
+          Change
+        </button>
+      </div>
+
+      <div className="mt-8 grid gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-horizon/70">Instant quote</p>
+          <p className="mt-2 text-4xl font-bold text-horizon">
+            {quoteAvailable ? formatCurrency(quote!.baseRate) : "—"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-horizon/15 bg-white/75 p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Quote details</p>
+          {quoteAvailable ? (
+            <div className="mt-3 space-y-2 text-sm text-midnight/80">
+              <div className="flex items-center justify-between">
+                <span>Base fare</span>
+                <span>{formatCurrency(quote!.baseFare)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>
+                  Extra passengers{" "}
+                  {quote!.extraPassengers > 0 ? `• ${quote!.extraPassengers} × ${formatCurrency(quote!.perPassenger)}` : ""}
+                </span>
+                <span>{formatCurrency(quote!.extraPassengerTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Estimated GST (5%)</span>
+                <span>{formatCurrency(quote!.estimatedGst)}</span>
+              </div>
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700">
+                Optional tip: Enter on Review step
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 space-y-2 text-sm text-midnight/70">
+              <p>We couldn’t calculate an instant fare for this route.</p>
+              <p>
+                Please adjust the trip details or call dispatch at{" "}
+                <a className="font-semibold text-horizon underline" href="tel:+16047516688">
+                  (604) 751-6688
+                </a>
+                .
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {pricing?.distanceRuleApplied ? (
+        <p className="mt-4 text-xs text-midnight/60">
+          Distance-based pricing applies. Provide full street addresses to confirm the final fare.
+        </p>
+      ) : null}
+
+      <div className="mt-8 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={onContinue}
+          disabled={!quoteAvailable}
+          className="flex-1 rounded-full bg-horizon px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-horizon/90 disabled:cursor-not-allowed disabled:bg-horizon/40 md:flex-none md:px-10"
+        >
+          Continue to Pickup Schedule
+        </button>
+        <button
+          type="button"
+          onClick={onEditTrip}
+          className="flex-1 rounded-full border border-horizon/40 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-horizon transition hover:bg-white/90 md:flex-none md:px-10"
+        >
+          Edit details
+        </button>
+      </div>
     </GlassPanel>
   )
 }

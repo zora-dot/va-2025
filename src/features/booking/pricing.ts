@@ -1,5 +1,12 @@
 import { pricingMatrix } from "@/data/pricing"
-import type { PricingDestinations, PricingVehicleRates } from "@/lib/types/pricing"
+import {
+  DISTANCE_RULE_KEY,
+  type PricingDestinations,
+  type PricingVehicleRates,
+  type PricingVehicleNumericRates,
+  type DistanceRuleConfig,
+  type PricingBreakdown,
+} from "@/lib/types/pricing"
 
 export const HOURLY_TOUR_LABEL = "Hourly Tour Shuttle"
 const HOURLY_TOUR_RATE = 100
@@ -18,7 +25,36 @@ export interface PricingResult {
   baseRate: number | null
   vehicleKey: string | null
   availableVehicles: string[]
-  ratesTable?: PricingVehicleRates
+  ratesTable?: PricingVehicleNumericRates
+  distanceRule?: DistanceRuleConfig | null
+  distanceRuleApplied?: boolean
+  manualQuoteId?: string | null
+  manualApprovalStatus?: "pending" | "approved" | "declined" | null
+  manualDecisionAt?: string | null
+  manualDecisionBy?: string | null
+}
+
+export interface PricingQuoteResult extends PricingResult {
+  distanceDetails?: {
+    km: number
+    durationMinutes: number
+  }
+  breakdown?: PricingBreakdown
+  quoteId?: string | null
+  currency?: string | null
+  total?: number | null
+  validUntil?: string | null
+  coverageOk?: boolean | null
+  warnings?: string[] | null
+  signature?: string | null
+  lineItems?: QuoteLineItem[]
+}
+
+export interface QuoteLineItem {
+  code: string
+  label: string
+  amount: number
+  meta?: Record<string, unknown>
 }
 
 export const getAvailableDirections = (): TripDirection[] =>
@@ -44,11 +80,12 @@ const passengerKeyMatcher = (passengerCount: number): string[] => {
   if (passengerCount >= 8) return ["8-11", "11"]
   if (passengerCount >= 7) return ["7v", "7"]
   if (passengerCount >= 6) return ["6v", "6"]
+  if (passengerCount <= 0) return []
   return [passengerCount.toString()]
 }
 
 const pickRateKey = (
-  rates: PricingVehicleRates,
+  rates: PricingVehicleNumericRates,
   passengerCount: number,
   preferred?: "standard" | "van",
 ): string | null => {
@@ -70,6 +107,27 @@ const pickRateKey = (
   return firstKey ?? null
 }
 
+const splitRates = (rates: PricingVehicleRates | undefined) => {
+  const numeric: PricingVehicleNumericRates = {}
+  let distanceRule: DistanceRuleConfig | null = null
+
+  if (!rates) {
+    return { numeric, distanceRule }
+  }
+
+  for (const [key, value] of Object.entries(rates)) {
+    if (key === DISTANCE_RULE_KEY && typeof value === "object" && value && value.type === "distance") {
+      distanceRule = value as DistanceRuleConfig
+      continue
+    }
+    if (typeof value === "number") {
+      numeric[key] = value
+    }
+  }
+
+  return { numeric, distanceRule }
+}
+
 export const calculatePricing = ({
   direction,
   origin,
@@ -77,12 +135,22 @@ export const calculatePricing = ({
   passengerCount,
   preferredVehicle,
 }: PricingRequest): PricingResult => {
-  const group = pricingMatrix[direction]
-  const origins = group ?? {}
-  const destinationGroup: PricingDestinations | undefined = origins[origin]
-  const rates: PricingVehicleRates | undefined = destinationGroup?.[destination]
+  let lookupDirection: TripDirection = direction
+  let lookupOrigin = origin
+  let lookupDestination = destination
 
-  if (destination === HOURLY_TOUR_LABEL) {
+  if (direction === "From the Airport") {
+    lookupDirection = "To the Airport"
+    lookupOrigin = destination
+    lookupDestination = origin
+  }
+
+  const group = pricingMatrix[lookupDirection]
+  const origins = group ?? {}
+  const destinationGroup: PricingDestinations | undefined = origins[lookupOrigin]
+  const rates: PricingVehicleRates | undefined = destinationGroup?.[lookupDestination]
+
+  if (lookupDestination === HOURLY_TOUR_LABEL) {
     return {
       baseRate: HOURLY_TOUR_RATE,
       vehicleKey: "hourly",
@@ -91,20 +159,40 @@ export const calculatePricing = ({
     }
   }
 
-  if (!rates) {
+  const { numeric: numericRates, distanceRule } = splitRates(rates)
+
+  if (!rates || (Object.keys(numericRates).length === 0 && !distanceRule)) {
     return {
       baseRate: null,
       vehicleKey: null,
       availableVehicles: [],
+      distanceRule,
+      distanceRuleApplied: Boolean(distanceRule),
     }
   }
 
-  const vehicleKey = pickRateKey(rates, passengerCount, preferredVehicle)
+  const vehicleKey = pickRateKey(numericRates, passengerCount, preferredVehicle)
+  const rawBaseRate = vehicleKey ? numericRates[vehicleKey] ?? null : null
+  const baseRate = rawBaseRate != null ? Math.round(rawBaseRate) : null
+  const shouldApplyDistanceRule = Boolean(distanceRule) && passengerCount <= 5
+
+  if (!shouldApplyDistanceRule) {
+    return {
+      baseRate,
+      vehicleKey,
+      availableVehicles: Object.keys(numericRates),
+      ratesTable: numericRates,
+      distanceRule: shouldApplyDistanceRule ? distanceRule : null,
+      distanceRuleApplied: false,
+    }
+  }
 
   return {
-    baseRate: vehicleKey ? rates[vehicleKey] ?? null : null,
+    baseRate,
     vehicleKey,
-    availableVehicles: Object.keys(rates),
-    ratesTable: rates,
+    availableVehicles: Object.keys(numericRates),
+    ratesTable: numericRates,
+    distanceRule,
+    distanceRuleApplied: true,
   }
 }

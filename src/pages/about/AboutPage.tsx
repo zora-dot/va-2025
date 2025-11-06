@@ -1,4 +1,5 @@
 import { GlassPanel } from "@/components/ui/GlassPanel"
+import { ResponsiveImage } from "@/components/ui/ResponsiveImage"
 import { aboutContent } from "@/data/about"
 import { ShieldCheck, Users, Clock, MapPin } from "lucide-react"
 
@@ -66,10 +67,17 @@ export const AboutPage = () => {
           ))}
         </div>
         <div className="space-y-4">
-          <img
+          <ResponsiveImage
             src="https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1000&q=80"
             alt="Valley Airporter shuttle fleet"
             className="h-56 w-full rounded-3xl object-cover"
+            sources={[
+              {
+                srcSet: "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=640&q=75&fm=webp",
+                type: "image/webp",
+                media: "(max-width: 768px)",
+              },
+            ]}
           />
           <div className="rounded-2xl border border-horizon/25 bg-white/80 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-horizon/80">

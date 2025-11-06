@@ -1,10 +1,3 @@
-export const heroServiceCopy = `INTRODUCING……
+export const heroServiceCopy = `Real-time pricing, instant confirmations, and secure payment links—powered by the new Valley Airporter booking platform.
 
-OUR NEW AND IMPROVED CUSTOMER SERVICE CHATBOT THAT CAN ANSWER ALL PRICE INQUIRIES AND ACCEPT BOOKINGS ONLINE
-
-**GUARANTEED** Flat Rate Price For Any Address!
-
-(For Same Day Bookings Or Within 24 Hours, Please Contact Us Via Phone/Text at 1-604-751-6688)
-
-We are working in a Partnership with Cheam Tours Ltd. (Airport Link Shuttle – 1-604-594-3333)
-`
+Book the exact vehicle you need, share trip updates automatically with family, and manage returns or edits online 24/7.`

@@ -1,4 +1,4 @@
-import { type PropsWithChildren } from "react"
+import { memo, type PropsWithChildren } from "react"
 import { twMerge } from "tailwind-merge"
 import { clsx } from "clsx"
 
@@ -6,17 +6,17 @@ type GlassPanelProps = PropsWithChildren<{
   className?: string
 }>
 
-export const GlassPanel = ({ className, children }: GlassPanelProps) => {
+const GlassPanelComponent = ({ className, children }: GlassPanelProps) => {
   return (
     <div
       className={twMerge(
         clsx(
-          "group relative overflow-hidden rounded-glass border border-white/60 text-midnight",
-          "bg-white/60 backdrop-blur-2xl shadow-glow transition-all duration-300 ease-out",
-          "hover:-translate-y-1 hover:shadow-2xl hover:shadow-horizon/20 hover:border-horizon/40",
-          "focus-within:-translate-y-1 focus-within:shadow-2xl focus-within:shadow-horizon/20",
-          "before:pointer-events-none before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/60 before:via-white/40 before:to-transparent",
-          "after:pointer-events-none after:absolute after:-top-12 after:right-6 after:h-40 after:w-40 after:rounded-full after:bg-white/50 after:blur-3xl",
+          "group rounded-glass border border-white/35 text-midnight",
+          "bg-[color:var(--va-color-surface)]/92 backdrop-blur-2xl shadow-[0_24px_55px_-24px_rgba(31,90,168,0.35)] transition-all duration-300 ease-out",
+          "hover:-translate-y-1 hover:shadow-[0_26px_55px_-26px_rgba(44,177,166,0.35)] hover:border-horizon/30",
+          "focus-within:-translate-y-1 focus-within:shadow-[0_28px_60px_-26px_rgba(44,177,166,0.35)]",
+          "before:pointer-events-none before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/65 before:via-white/30 before:to-transparent",
+          "after:pointer-events-none after:absolute after:-top-14 after:right-4 after:h-44 after:w-44 after:rounded-full after:bg-gradient-to-br after:from-[rgba(255,180,84,0.35)] after:via-transparent after:to-transparent after:blur-3xl",
           className,
         ),
       )}
@@ -25,3 +25,7 @@ export const GlassPanel = ({ className, children }: GlassPanelProps) => {
     </div>
   )
 }
+
+GlassPanelComponent.displayName = "GlassPanel"
+
+export const GlassPanel = memo(GlassPanelComponent)

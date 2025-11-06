@@ -9,8 +9,12 @@ export interface AuthContextValue {
   primaryRole: AppUserRole
   isEmailVerified: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
+  requestMagicLink: (email: string, redirect?: string | null) => Promise<void>
+  signInWithGoogle: () => Promise<void>
+  signInWithApple: () => Promise<void>
   signOut: () => Promise<void>
-  sendVerificationEmail: () => Promise<void>
+  refreshUser: () => Promise<boolean>
+  linkPassword: (password: string) => Promise<void>
+  hasPasswordProvider: boolean
   hasRole: (role: AppUserRole | AppUserRole[]) => boolean
 }

@@ -1,0 +1,1166 @@
+{
+  "To the Airport": {
+    "Abbotsford (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 50,
+        "2": 50,
+        "3": 50,
+        "4": 50,
+        "5": 50,
+        "6": 100,
+        "6v": 100,
+        "7v": 110,
+        "8-11": 150,
+        "12-14": 180,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 50,
+          "baseDistanceKm": 10,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 0,
+          "target": {
+            "label": "Abbotsford International Airport (YXX)",
+            "lat": 49.0252,
+            "lng": -122.3601
+          }
+        }
+      },
+      "Bellingham International Airport (BLI)": {
+        "1": 180,
+        "2": 190,
+        "3": 200,
+        "4": 210,
+        "5": 220,
+        "6": 230,
+        "6v": 230,
+        "7v": 240,
+        "8-11": 280,
+        "12-14": 310,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 180,
+          "baseDistanceKm": 50,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Bellingham International Airport (BLI)",
+            "lat": 48.7927,
+            "lng": -122.5375
+          }
+        }
+      },
+      "Canada Place Cruise Terminal in Vancouver": {
+        "1": 150,
+        "2": 160,
+        "3": 170,
+        "4": 180,
+        "5": 190,
+        "6": 200,
+        "6v": 200,
+        "7v": 210,
+        "8-11": 250,
+        "12-14": 280,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 150,
+          "baseDistanceKm": 72,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Canada Place Cruise Terminal in Vancouver",
+            "lat": 49.2888,
+            "lng": -123.1113
+          }
+        }
+      },
+      "Horseshoe Bay Ferry Terminal in West Vancouver": {
+        "1": 160,
+        "2": 170,
+        "3": 180,
+        "4": 190,
+        "5": 200,
+        "6": 210,
+        "6v": 210,
+        "7v": 220,
+        "8-11": 260,
+        "12-14": 290,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 170,
+          "baseDistanceKm": 90,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Horseshoe Bay Ferry Terminal in West Vancouver",
+            "lat": 49.3724,
+            "lng": -123.2737
+          }
+        }
+      },
+      "King George Skytrain Station in Surrey": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 120,
+        "7v": 130,
+        "8-11": 170,
+        "12-14": 200,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 70,
+          "baseDistanceKm": 45,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "King George Skytrain Station in Surrey",
+            "lat": 49.1829,
+            "lng": -122.8448
+          }
+        }
+      },
+      "Tsawwassen Ferry Terminal in Delta": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "6v": 150,
+        "7v": 160,
+        "8-11": 200,
+        "12-14": 230,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 100,
+          "baseDistanceKm": 80,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Tsawwassen Ferry Terminal",
+            "lat": 49.0089,
+            "lng": -123.1187
+          }
+        }
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 110,
+        "2": 120,
+        "3": 130,
+        "4": 140,
+        "5": 150,
+        "6": 160,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 310,
+        "12-14": 350,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 110,
+          "baseDistanceKm": 80,
+          "perKmRate": 2,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Vancouver International Airport (YVR)",
+            "lat": 49.1947,
+            "lng": -123.1792
+          }
+        }
+      }
+    },
+    "Abbotsford International Airport (YXX)": {
+      "Abbotsford (Any Address)": {
+        "1": 50,
+        "2": 50,
+        "3": 50,
+        "4": 50,
+        "5": 50,
+        "6": 100,
+        "6v": 100,
+        "7v": 110,
+        "8-11": 150,
+        "12-14": 180,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 50,
+          "baseDistanceKm": 10,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 0,
+          "target": {
+            "label": "Abbotsford International Airport (YXX)",
+            "lat": 49.0252,
+            "lng": -122.3601
+          }
+        }
+      },
+      "Bellingham International Airport (BLI)": {
+        "1": 180,
+        "2": 190,
+        "3": 200,
+        "4": 210,
+        "5": 220,
+        "6": 230,
+        "6v": 230,
+        "7v": 240,
+        "8-11": 280,
+        "12-14": 310
+      },
+      "Canada Place Cruise Terminal in Vancouver": {
+        "1": 150,
+        "2": 160,
+        "3": 170,
+        "4": 180,
+        "5": 190,
+        "6": 200,
+        "6v": 200,
+        "7v": 210,
+        "8-11": 250,
+        "12-14": 280
+      },
+      "Horseshoe Bay Ferry Terminal in West Vancouver": {
+        "1": 160,
+        "2": 170,
+        "3": 180,
+        "4": 190,
+        "5": 200,
+        "6": 210,
+        "6v": 210,
+        "7v": 220,
+        "8-11": 260,
+        "12-14": 290
+      },
+      "King George Skytrain Station in Surrey": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 120,
+        "7v": 130,
+        "8-11": 170,
+        "12-14": 200
+      },
+      "Tsawwassen Ferry Terminal in Delta": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "6v": 150,
+        "7v": 160,
+        "8-11": 200,
+        "12-14": 230
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 110,
+        "2": 120,
+        "3": 130,
+        "4": 140,
+        "5": 150,
+        "6": 160,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 310,
+        "12-14": 350
+      }
+    },
+    "Agassiz (Any Address)": {
+      "Vancouver International Airport (YVR)": {
+        "1": 250,
+        "2": 260,
+        "3": 270,
+        "4": 280,
+        "5": 290,
+        "6": 300,
+        "6v": 400,
+        "7v": 400,
+        "8-11": 450,
+        "12-14": 500
+      }
+    },
+    "Aldergrove (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 50,
+        "2": 60,
+        "3": 60,
+        "4": 60,
+        "5": 60,
+        "6": 70,
+        "6v": 85,
+        "7v": 85,
+        "8-11": 110,
+        "12-14": 135
+      }
+    },
+    "Bellingham International Airport (BLI)": {
+      "Abbotsford (Any Address)": {
+        "1": 180,
+        "2": 190,
+        "3": 200,
+        "4": 210,
+        "5": 220,
+        "6": 230,
+        "6v": 230,
+        "7v": 240,
+        "8-11": 280,
+        "12-14": 310,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 180,
+          "baseDistanceKm": 50,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Abbotsford International Airport (YXX)",
+            "lat": 49.0252,
+            "lng": -122.3601
+          }
+        }
+      },
+      "Chilliwack (Any Address)": {
+        "1": 200,
+        "2": 210,
+        "3": 220,
+        "4": 230,
+        "5": 240,
+        "6": 250,
+        "6v": 300,
+        "7v": 300,
+        "8-11": 360,
+        "12-14": 420,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 200,
+          "baseDistanceKm": 60,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Chilliwack (Any Address)",
+            "lat": 49.1579,
+            "lng": -121.9515
+          }
+        }
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 230,
+        "2": 240,
+        "3": 250,
+        "4": 260,
+        "5": 270,
+        "6": 280,
+        "6v": 350,
+        "7v": 350,
+        "8-11": 400,
+        "12-14": 450
+      }
+    },
+    "Bellingham, U.S. (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 180,
+        "2": 190,
+        "3": 200,
+        "4": 210,
+        "5": 220,
+        "6": 230,
+        "6v": 300,
+        "7v": 300,
+        "8-11": 350,
+        "12-14": 400
+      }
+    },
+    "Burnaby (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 300,
+        "12-14": 350
+      }
+    },
+    "Canada Place Cruise Terminal in Vancouver": {
+      "Abbotsford (Any Address)": {
+        "1": 150,
+        "2": 160,
+        "3": 170,
+        "4": 180,
+        "5": 190,
+        "6": 200,
+        "6v": 200,
+        "7v": 210,
+        "8-11": 250,
+        "12-14": 280,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 150,
+          "baseDistanceKm": 72,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Abbotsford International Airport (YXX)",
+            "lat": 49.0252,
+            "lng": -122.3601
+          }
+        }
+      },
+      "Chilliwack (Any Address)": {
+        "1": 220,
+        "2": 230,
+        "3": 240,
+        "4": 250,
+        "5": 260,
+        "6": 270,
+        "6v": 340,
+        "7v": 340,
+        "8-11": 420,
+        "12-14": 480
+      },
+      "Abbotsford International Airport (YXX)": {
+        "1": 150,
+        "2": 160,
+        "3": 170,
+        "4": 180,
+        "5": 190,
+        "6": 200,
+        "6v": 290,
+        "7v": 290,
+        "8-11": 350,
+        "12-14": 400
+      }
+    },
+    "Chilliwack (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 170,
+        "7v": 170,
+        "8-11": 220,
+        "12-14": 250
+      },
+      "Bellingham International Airport (BLI)": {
+        "1": 200,
+        "2": 210,
+        "3": 220,
+        "4": 230,
+        "5": 240,
+        "6": 250,
+        "6v": 300,
+        "7v": 300,
+        "8-11": 360,
+        "12-14": 420,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 200,
+          "baseDistanceKm": 60,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Bellingham International Airport (BLI)",
+            "lat": 48.7927,
+            "lng": -122.5375
+          }
+        }
+      },
+      "Canada Place Cruise Terminal in Vancouver": {
+        "1": 220,
+        "2": 230,
+        "3": 240,
+        "4": 250,
+        "5": 260,
+        "6": 270,
+        "6v": 340,
+        "7v": 340,
+        "8-11": 420,
+        "12-14": 480
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 180,
+        "2": 190,
+        "3": 200,
+        "4": 210,
+        "5": 220,
+        "6": 230,
+        "6v": 300,
+        "7v": 300,
+        "8-11": 380,
+        "12-14": 450
+      },
+      "Horseshoe Bay Ferry Terminal in West Vancouver": {
+        "1": 220,
+        "2": 230,
+        "3": 240,
+        "4": 250,
+        "5": 260,
+        "6": 270,
+        "6v": 340,
+        "7v": 340,
+        "8-11": 420,
+        "12-14": 480
+      }
+    },
+    "Coquitlam (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 90,
+        "2": 100,
+        "3": 110,
+        "4": 120,
+        "5": 130,
+        "6": 140,
+        "6v": 200,
+        "7v": 200,
+        "8-11": 250,
+        "12-14": 300
+      }
+    },
+    "Delta (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 90,
+        "2": 100,
+        "3": 110,
+        "4": 120,
+        "5": 130,
+        "6": 140,
+        "6v": 200,
+        "7v": 200,
+        "8-11": 250,
+        "12-14": 300
+      }
+    },
+    "Deroche (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 80,
+        "2": 90,
+        "3": 100,
+        "4": 110,
+        "5": 120,
+        "6": 130,
+        "6v": 190,
+        "7v": 190,
+        "8-11": 250,
+        "12-14": 300
+      }
+    },
+    "Vancouver Downtown (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 140,
+        "2": 150,
+        "3": 160,
+        "4": 170,
+        "5": 180,
+        "6": 190,
+        "6v": 280,
+        "7v": 280,
+        "8-11": 350,
+        "12-14": 400
+      }
+    },
+    "Harrison (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 110,
+        "2": 120,
+        "3": 130,
+        "4": 140,
+        "5": 150,
+        "6": 160,
+        "6v": 220,
+        "7v": 220,
+        "8-11": 250,
+        "12-14": 300
+      }
+    },
+    "Harrison Mills (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 90,
+        "2": 100,
+        "3": 110,
+        "4": 120,
+        "5": 130,
+        "6": 140,
+        "6v": 200,
+        "7v": 200,
+        "8-11": 250,
+        "12-14": 300
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 220,
+        "2": 230,
+        "3": 240,
+        "4": 250,
+        "5": 260,
+        "6": 270,
+        "6v": 370,
+        "7v": 370,
+        "8-11": 400,
+        "12-14": 450
+      }
+    },
+    "Harrison Springs (Any Address)": {
+      "Vancouver International Airport (YVR)": {
+        "1": 250,
+        "2": 260,
+        "3": 270,
+        "4": 280,
+        "5": 290,
+        "6": 300,
+        "6v": 400,
+        "7v": 400,
+        "8-11": 450,
+        "12-14": 500
+      }
+    },
+    "Hatzic(Mission) (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 170,
+        "7v": 170,
+        "8-11": 220,
+        "12-14": 250
+      }
+    },
+    "Hope (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 160,
+        "2": 170,
+        "3": 180,
+        "4": 190,
+        "5": 200,
+        "6": 210,
+        "6v": 280,
+        "7v": 280,
+        "8-11": 350,
+        "12-14": 400
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 270,
+        "2": 280,
+        "3": 290,
+        "4": 300,
+        "5": 310,
+        "6": 320,
+        "6v": 410,
+        "7v": 410,
+        "8-11": 450,
+        "12-14": 500
+      }
+    },
+    "Horseshoe Bay Ferry Terminal in West Vancouver": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 170,
+        "2": 180,
+        "3": 190,
+        "4": 200,
+        "5": 210,
+        "6": 220,
+        "6v": 290,
+        "7v": 290,
+        "8-11": 350,
+        "12-14": 400
+      },
+      "Abbotsford (Any Address)": {
+        "1": 160,
+        "2": 170,
+        "3": 180,
+        "4": 190,
+        "5": 200,
+        "6": 210,
+        "6v": 210,
+        "7v": 220,
+        "8-11": 260,
+        "12-14": 290,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 170,
+          "baseDistanceKm": 90,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Abbotsford International Airport (YXX)",
+            "lat": 49.0252,
+            "lng": -122.3601
+          }
+        }
+      }
+    },
+    "King George Skytrain Station in Surrey": {
+      "Abbotsford (Any Address)": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 120,
+        "7v": 130,
+        "8-11": 170,
+        "12-14": 200,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 70,
+          "baseDistanceKm": 45,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Abbotsford International Airport (YXX)",
+            "lat": 49.0252,
+            "lng": -122.3601
+          }
+        }
+      },
+      "Abbotsford International Airport (YXX)": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 170,
+        "7v": 170,
+        "8-11": 220,
+        "12-14": 250
+      }
+    },
+    "Kitsilano (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 140,
+        "2": 150,
+        "3": 160,
+        "4": 170,
+        "5": 180,
+        "6": 190,
+        "6v": 260,
+        "7v": 260,
+        "8-11": 300,
+        "12-14": 350
+      }
+    },
+    "Lake Errock (Any Address)": {
+      "Vancouver International Airport (YVR)": {
+        "1": 200,
+        "2": 210,
+        "3": 220,
+        "4": 230,
+        "5": 240,
+        "6": 250,
+        "6v": 320,
+        "7v": 320,
+        "8-11": 400,
+        "12-14": 450
+      }
+    },
+    "Langley (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 60,
+        "2": 70,
+        "3": 80,
+        "4": 90,
+        "5": 100,
+        "6": 110,
+        "6v": 120,
+        "7v": 120,
+        "8-11": 175,
+        "12-14": 225
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 110,
+        "2": 120,
+        "3": 130,
+        "4": 140,
+        "5": 150,
+        "6": 160,
+        "6v": 225,
+        "7v": 225,
+        "8-11": 310,
+        "12-14": 350
+      }
+    },
+    "Lindell Beach (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 90,
+        "2": 100,
+        "3": 110,
+        "4": 120,
+        "5": 130,
+        "6": 140,
+        "6v": 200,
+        "7v": 200,
+        "8-11": 250,
+        "12-14": 300
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 240,
+        "2": 250,
+        "3": 260,
+        "4": 270,
+        "5": 280,
+        "6": 290,
+        "6v": 390,
+        "7v": 390,
+        "8-11": 450,
+        "12-14": 500
+      }
+    },
+    "Maple Ridge (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 170,
+        "7v": 170,
+        "8-11": 220,
+        "12-14": 250
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 90,
+        "2": 100,
+        "3": 110,
+        "4": 120,
+        "5": 130,
+        "6": 140,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 300,
+        "12-14": 350
+      }
+    },
+    "Mission (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 60,
+        "2": 70,
+        "3": 80,
+        "4": 90,
+        "5": 100,
+        "6": 110,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 300,
+        "12-14": 350
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 150,
+        "2": 160,
+        "3": 170,
+        "4": 180,
+        "5": 190,
+        "6": 200,
+        "6v": 290,
+        "7v": 290,
+        "8-11": 350,
+        "12-14": 400
+      }
+    },
+    "New Westminister (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "6v": 225,
+        "7v": 225,
+        "8-11": 300,
+        "12-14": 350
+      }
+    },
+    "North Vancouver (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 140,
+        "2": 150,
+        "3": 160,
+        "4": 170,
+        "5": 180,
+        "6": 190,
+        "6v": 260,
+        "7v": 260,
+        "8-11": 300,
+        "12-14": 350
+      }
+    },
+    "Pitt Meadows (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 180,
+        "7v": 180,
+        "8-11": 250,
+        "12-14": 300
+      }
+    },
+    "Port Coquitlam (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 90,
+        "2": 100,
+        "3": 110,
+        "4": 120,
+        "5": 130,
+        "6": 140,
+        "6v": 200,
+        "7v": 200,
+        "8-11": 250,
+        "12-14": 300
+      }
+    },
+    "Port Moody (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "6v": 225,
+        "7v": 225,
+        "8-11": 300,
+        "12-14": 350
+      }
+    },
+    "Richmond (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 110,
+        "2": 120,
+        "3": 130,
+        "4": 140,
+        "5": 150,
+        "6": 160,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 310,
+        "12-14": 350
+      }
+    },
+    "Rosedale (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "6v": 225,
+        "7v": 225,
+        "8-11": 300,
+        "12-14": 350
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 220,
+        "2": 230,
+        "3": 240,
+        "4": 250,
+        "5": 260,
+        "6": 270,
+        "6v": 350,
+        "7v": 350,
+        "8-11": 400,
+        "12-14": 450
+      }
+    },
+    "Sardis (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 180,
+        "7v": 180,
+        "8-11": 250,
+        "12-14": 300
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 180,
+        "2": 190,
+        "3": 200,
+        "4": 210,
+        "5": 220,
+        "6": 230,
+        "6v": 300,
+        "7v": 300,
+        "8-11": 380,
+        "12-14": 450
+      }
+    },
+    "Surrey (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 80,
+        "2": 90,
+        "3": 100,
+        "4": 110,
+        "5": 120,
+        "6": 130,
+        "6v": 160,
+        "7v": 160,
+        "8-11": 200,
+        "12-14": 250
+      }
+    },
+    "Tsawwassen (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "6v": 225,
+        "7v": 225,
+        "8-11": 300,
+        "12-14": 350
+      }
+    },
+    "Tsawwassen Ferry Terminal in Delta": {
+      "Abbotsford (Any Address)": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 100,
+          "baseDistanceKm": 80,
+          "perKmRate": 1.5,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Tsawwassen Ferry Terminal",
+            "lat": 49.0089,
+            "lng": -123.1187
+          }
+        },
+        "6v": 150,
+        "7v": 160,
+        "8-11": 200,
+        "12-14": 230
+      },
+      "Abbotsford International Airport (YXX)": {
+        "1": 100,
+        "2": 110,
+        "3": 120,
+        "4": 130,
+        "5": 140,
+        "6": 150,
+        "6v": 225,
+        "7v": 225,
+        "8-11": 300,
+        "12-14": 350
+      }
+    },
+    "Vancouver International Airport (YVR)": {
+      "Abbotsford (Any Address)": {
+        "1": 110,
+        "2": 120,
+        "3": 130,
+        "4": 140,
+        "5": 150,
+        "6": 160,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 310,
+        "12-14": 350,
+        "_distanceRule": {
+          "type": "distance",
+          "baseFare": 110,
+          "baseDistanceKm": 80,
+          "perKmRate": 2,
+          "additionalPassengerFee": 10,
+          "target": {
+            "label": "Abbotsford International Airport (YXX)",
+            "lat": 49.0252,
+            "lng": -122.3601
+          }
+        }
+      },
+      "Abbotsford International Airport (YXX)": {
+        "1": 110,
+        "2": 120,
+        "3": 130,
+        "4": 140,
+        "5": 150,
+        "6": 160,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 310,
+        "12-14": 350
+      }
+    },
+    "West Vancouver (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 160,
+        "2": 170,
+        "3": 180,
+        "4": 190,
+        "5": 200,
+        "6": 210,
+        "6v": 300,
+        "7v": 300,
+        "8-11": 350,
+        "12-14": 400
+      }
+    },
+    "White Rock (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 70,
+        "2": 80,
+        "3": 90,
+        "4": 100,
+        "5": 110,
+        "6": 120,
+        "6v": 150,
+        "7v": 150,
+        "8-11": 200,
+        "12-14": 250
+      }
+    },
+    "Yarrow (Any Address)": {
+      "Abbotsford International Airport (YXX)": {
+        "1": 60,
+        "2": 70,
+        "3": 80,
+        "4": 90,
+        "5": 100,
+        "6": 110,
+        "6v": 160,
+        "7v": 160,
+        "8-11": 200,
+        "12-14": 250
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 160,
+        "2": 170,
+        "3": 180,
+        "4": 190,
+        "5": 200,
+        "6": 210,
+        "6v": 300,
+        "7v": 300,
+        "8-11": 350,
+        "12-14": 400
+      }
+    }
+  }
+}

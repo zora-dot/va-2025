@@ -1,1 +1,1 @@
-export const experienceCopy = `With over 15 years of experience, we have satisfied over an estimated of 35,000 customers, and travelled more than 2,000,000 KM in total. We get you where you want to go, and when you want to go.`
+export const experienceCopy = `With over 15 years of experience, we have satisfied over an estimated of 35,000 customers, and travelled more than 1,000,000 KM in total. We get you where you want to go, and when you want to go.`
