@@ -590,7 +590,9 @@ export const createBooking = onRequest({
     if (payment.preference === "pay_now") {
       try {
         paymentLink = await createSquarePaymentLink({
-          amountCents: totalAmount,
+          fareCents: baseAmount,
+          gstCents: gstAmount,
+          tipCents: tipAmount,
           bookingId: bookingRef.id,
           bookingNumber,
           customerName: passenger.primaryPassenger,

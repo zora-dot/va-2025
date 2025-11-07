@@ -36,6 +36,7 @@ const DEFAULT_CURRENCY = "CAD"
 const PRICE_LOCK_DURATION_MS = 30 * 60 * 1000 // 30 minutes
 const QUOTE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const HOUR_MS = 60 * 60 * 1000
+const GST_RATE = 0.05
 
 const formatPickupDisplay = (date: Date) => {
   const datePart = new Intl.DateTimeFormat("en-US", {
@@ -649,8 +650,9 @@ export const confirmQuote = async (input: ConfirmQuoteInput) => {
   const lockedSubtotalCents = baseCents + passengerSurchargeCents + distanceSurchargeCents + extraKmCents
   const lockedTotalCents = Math.max(Math.round(data.pricing.total * 100), lockedSubtotalCents)
   const tipCents = Math.max(0, Math.round((input.payment.tipAmount ?? 0) * 100))
-  const gstCents = 0 // GST handled at payment stage; kept at zero per quote flow requirements
-  const totalCents = lockedTotalCents + tipCents + gstCents
+  const applyGst = input.payment.preference === "pay_now"
+  const gstCents = applyGst ? Math.round(lockedSubtotalCents * GST_RATE) : 0
+  const totalCents = lockedSubtotalCents + tipCents + gstCents
 
   const breakdown = {
     baseFare: roundToCurrency(data.pricing.base),
@@ -802,7 +804,9 @@ export const confirmQuote = async (input: ConfirmQuoteInput) => {
   if (input.payment.preference === "pay_now") {
     try {
       paymentLink = await createSquarePaymentLink({
-        amountCents: totalCents,
+        fareCents: lockedSubtotalCents,
+        gstCents,
+        tipCents,
         bookingId: bookingRef.id,
         bookingNumber,
         customerName: passengerName,

@@ -118,6 +118,10 @@
 }
 
 @layer components {
+  .step-scroll-anchor {
+    scroll-margin-top: calc(var(--va-header-height, 112px) + 40px);
+  }
+
   .field-error-control input,
   .field-error-control select,
   .field-error-control textarea,

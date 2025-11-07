@@ -128,6 +128,59 @@ export const queueBookingEmail = async ({
 
   const pickupDisplay = formatTripDateTime(pickupDate, pickupTime);
   const showPaymentCta = paymentPreference === "pay_now";
+  const normalizeLabel = (value?: string | null) => value?.toLowerCase().replace(/\s+/g, " ").trim() ?? ""
+
+  const vehicleLocationBlocks = () => {
+    const originNormalized = normalizeLabel(origin)
+    const included = (needle: string) => originNormalized.includes(needle.toLowerCase())
+
+    const wrapHtml = (content: string) => `
+    <div style="margin: 1rem 0; padding: 1rem 1.25rem; border-radius: 18px; background: #fff7b2; border: 1px solid #fcd34d; color: #0b1f36;">
+      ${content}
+    </div>
+    `
+
+    if (included("vancouver international airport") || originNormalized.includes("yvr")) {
+      const htmlContent = `
+        <p style="margin: 0 0 0.4rem 0; font-weight: 700; text-decoration: underline;">Here is where our vehicle will be located at the Vancouver Airport:</p>
+        <p style="margin: 0 0 0.6rem 0;">(Vehicle will be a 7-Seater Van with “Airport Shuttle” Stickers on all sides)</p>
+        <p style="margin: 0 0 0.3rem 0; font-weight: 600;">Domestic Terminal:</p>
+        <p style="margin: 0 0 0.6rem 0;">- On Floor Level One, by the Commercial Passenger Pick Up Area near the Car Rentals/Police Area.</p>
+        <p style="margin: 0 0 0.3rem 0; font-weight: 600;">International Terminal:</p>
+        <p style="margin: 0;">- Our dispatch team will coordinate via phone/text and the driver will meet you at one of the numbered pillars once you exit the International Arrivals Terminal.</p>
+      `
+      const textContent = [
+        "",
+        "Here is where our vehicle will be located at the Vancouver Airport:",
+        "(Vehicle will be a 7-Seater Van with “Airport Shuttle” Stickers on all sides)",
+        "Domestic Terminal:",
+        "- On Floor Level One, by the Commercial Passenger Pick Up Area near the Car Rentals/Police Area.",
+        "International Terminal:",
+        "- Our dispatch team will coordinate via phone/text and the driver will meet you at one of the numbered pillars once you exit the International Arrivals Terminal.",
+      ].join("\n")
+      return { html: wrapHtml(htmlContent), text: textContent }
+    }
+
+    if (included("abbotsford international airport") || originNormalized.includes("yxx")) {
+      const htmlContent = `
+        <p style="margin: 0 0 0.4rem 0; font-weight: 700; text-decoration: underline;">Here is where our vehicle will be located at the Abbotsford Airport:</p>
+        <p style="margin: 0 0 0.6rem 0;">(Vehicle will be a 7-Seater Van with “Airport Shuttle” Stickers on all sides)</p>
+        <p style="margin: 0;">- Outside the Arrivals Terminal, in the second traffic lane, in front of the yellow taxis—you’ll see the reserved “Airport Shuttle/Limousine” spot.</p>
+      `
+      const textContent = [
+        "",
+        "Here is where our vehicle will be located at the Abbotsford Airport:",
+        "(Vehicle will be a 7-Seater Van with “Airport Shuttle” Stickers on all sides)",
+        "- Outside the Arrivals Terminal, in the second traffic lane, in front of the yellow taxis—you’ll see the reserved “Airport Shuttle/Limousine” spot.",
+      ].join("\n")
+      return { html: wrapHtml(htmlContent), text: textContent }
+    }
+
+    return null
+  }
+
+  const vehicleLocationBlock = vehicleLocationBlocks()
+
   const paymentLinkBlockHtml =
     showPaymentCta && paymentLinkUrl
       ? `
@@ -195,6 +248,7 @@ export const queueBookingEmail = async ({
       <p style="margin: 0;"><strong>Arrival Flight Number:</strong> ${flightDisplay}</p>
       <p style="margin: 0;"><strong>Special Notes:</strong> ${notes || "None"}</p>
     </div>
+    ${vehicleLocationBlock?.html ?? ""}
     ${paymentLinkBlockHtml}
     <p>If you would like to make any changes or have questions, please contact us via email or text message at (604) 751-6688.</p>
     <p><strong>Special note:</strong> ${specialNote}</p>
@@ -215,6 +269,7 @@ export const queueBookingEmail = async ({
     `Date Booked On: ${bookedOnDisplay}`,
     `Arrival Flight Number: ${flightDisplay}`,
     `Special Notes: ${notes || "None"}`,
+    vehicleLocationBlock?.text ?? "",
     paymentLinkBlockText,
     "",
     "If you would like to make any changes or have questions, please contact us via email or text message at (604) 751-6688.",

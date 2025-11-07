@@ -116,6 +116,23 @@ const shouldShowDistanceFare = (origin: string, destination: string) => {
   )
 }
 
+const isYxxToAbbotsfordRoute = (origin: string, destination: string) => {
+  const originLower = origin.toLowerCase()
+  const destinationLower = destination.toLowerCase()
+  const matchesAirport = (text: string) =>
+    text.includes("abbotsford international airport") || text.includes("(yxx)")
+  const matchesAnyAddress = (text: string) =>
+    text.includes("abbotsford (any address)") || text.includes("abbotsford any address")
+
+  return (
+    (matchesAirport(originLower) && matchesAnyAddress(destinationLower)) ||
+    (matchesAirport(destinationLower) && matchesAnyAddress(originLower))
+  )
+}
+
+const getExtraPassengerFee = (origin: string, destination: string) =>
+  isYxxToAbbotsfordRoute(origin, destination) ? 0 : ADDITIONAL_PASSENGER_FEE
+
 const roundMinutesToStep = (minutes: number, step: number) => Math.floor(minutes / step) * step
 
 const extractTimeParts = (date: Date) => {
@@ -445,7 +462,8 @@ export const BookingWizard = () => {
         baseRate) ?? baseRate
     const baseFare = Math.max(0, rawBaseFare)
     const extraPassengers = Math.max(0, tripData.passengerCount - 1)
-    const extraPassengerTotal = extraPassengers * ADDITIONAL_PASSENGER_FEE
+    const perPassengerFee = getExtraPassengerFee(tripData.origin, tripData.destination)
+    const extraPassengerTotal = extraPassengers * perPassengerFee
     const roundedBaseRate = Math.round(baseRate)
     const usesDistanceFare = shouldShowDistanceFare(tripData.origin, tripData.destination)
     const rawDistanceFare = roundedBaseRate - baseFare - extraPassengerTotal
@@ -457,7 +475,7 @@ export const BookingWizard = () => {
       distanceFare,
       extraPassengers,
       extraPassengerTotal,
-      perPassenger: ADDITIONAL_PASSENGER_FEE,
+      perPassenger: perPassengerFee,
       estimatedGst,
     }
   }, [pricing, tripData])
@@ -708,15 +726,15 @@ export const BookingWizard = () => {
     estimatedQuote,
   ])
 
+  const scrollToStepHeader = () => {
+    stepHeaderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
   const goToStep = useCallback(
     (next: StepKey, options?: { reset?: boolean; scroll?: boolean }) => {
       if (options?.scroll) {
         requestAnimationFrame(() => {
-          const target = stepHeaderRef.current
-          if (!target) return
-          const rect = target.getBoundingClientRect()
-          const top = rect.top + window.scrollY - 120
-          window.scrollTo({ top, behavior: "smooth" })
+          scrollToStepHeader()
         })
       }
       if (next < 4) {
@@ -883,7 +901,7 @@ export const BookingWizard = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      <div ref={stepHeaderRef}>
+      <div ref={stepHeaderRef} className="step-scroll-anchor">
         <StepHeader
           current={step}
           maxStep={maxStepReached}
@@ -1243,10 +1261,10 @@ const TripStep = ({
                   <div
                     key={option.id}
                     className={clsx(
-                      "flex h-full flex-col gap-4 rounded-3xl border px-5 py-5 transition",
+                      "flex h-full flex-col gap-4 rounded-3xl px-5 py-5 transition",
                       isSelected
-                        ? "border-emerald-400 bg-emerald-50/90 text-horizon shadow-glow"
-                        : "border-horizon/30 bg-white/85 text-midnight/70",
+                        ? "border-[3px] border-emerald-400 bg-emerald-50/90 text-horizon shadow-glow"
+                        : "border border-horizon/30 bg-white/85 text-midnight/70",
                     )}
                     aria-pressed={isSelected}
                   >
@@ -1257,11 +1275,18 @@ const TripStep = ({
                         </p>
                         <p className="text-sm text-midnight/70">{option.helper}</p>
                       </div>
-                      {isSelected ? (
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700">
+                      <div className="flex flex-none items-start justify-end">
+                        <span
+                          className={clsx(
+                            "inline-flex w-40 justify-center rounded-full px-4 py-1 text-[12px] font-semibold uppercase tracking-[0.2em] whitespace-nowrap",
+                            isSelected ?
+                              "border border-emerald-500 bg-white text-emerald-600 shadow-sm" :
+                              "border border-transparent text-transparent opacity-0",
+                          )}
+                        >
                           Auto-selected
                         </span>
-                      ) : null}
+                      </div>
                     </div>
                   </div>
                 )
@@ -1299,7 +1324,7 @@ const TripStep = ({
               !passengerCount ||
               passengerLimitExceeded
             }
-            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 disabled:cursor-not-allowed disabled:border-horizon/30 disabled:bg-horizon/40"
+            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-8 py-4 text-base font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 disabled:cursor-not-allowed disabled:border-horizon/30 disabled:bg-horizon/40"
           >
             Continue to Price Quote
           </button>
@@ -1459,7 +1484,7 @@ const PriceQuoteStep = ({
               {waitingForQuote ? (
                 <p className="mt-3 text-sm uppercase tracking-[0.28em] text-midnight/60">Calculating live quote…</p>
               ) : quoteAvailable ? (
-                <div className="mt-3 space-y-3 text-sm text-midnight/80">
+                <div className="mt-3 space-y-3 text-base text-midnight/80">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">Base fare</span>
                     <span>{formatCurrency(quote!.baseFare)}</span>
@@ -1470,15 +1495,14 @@ const PriceQuoteStep = ({
                       <span>{formatCurrency(quote!.distanceFare)}</span>
                     </div>
                   ) : null}
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">
-                      Extra passengers{" "}
-                      {quote!.extraPassengers > 0 ?
-                        `• ${quote!.extraPassengers} × ${formatCurrency(quote!.perPassenger)}` :
-                        ""}
-                    </span>
-                    <span>{formatCurrency(quote!.extraPassengerTotal)}</span>
-                  </div>
+                  {quote!.extraPassengerTotal > 0 ? (
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">
+                        Extra passengers • {quote!.extraPassengers} × {formatCurrency(quote!.perPassenger)}
+                      </span>
+                      <span>{formatCurrency(quote!.extraPassengerTotal)}</span>
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between border-t border-horizon/10 pt-3 text-base font-semibold">
                     <span>Final Total</span>
                     <span>{roundedInstantQuote != null ? formatCurrency(roundedInstantQuote) : "—"}</span>
@@ -1487,14 +1511,14 @@ const PriceQuoteStep = ({
                     <button
                       type="button"
                       onClick={onContinue}
-                      className="mt-6 w-full rounded-full bg-horizon px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-horizon/90"
+                      className="mt-6 w-full rounded-full bg-horizon px-8 py-4 text-base font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-horizon/90"
                     >
                       Continue to Pickup Schedule
                     </button>
                   ) : null}
                 </div>
               ) : (
-                <div className="mt-3 space-y-2 text-sm text-midnight/70">
+                <div className="mt-3 space-y-2 text-base text-midnight/70">
                   <p>We couldn’t calculate an instant fare for this route.</p>
                   <p>
                     Please adjust the trip details or call dispatch at{" "}
@@ -1514,7 +1538,7 @@ const PriceQuoteStep = ({
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">
                 Trip checklist
               </p>
-              <ul className="mt-4 space-y-2 text-sm text-midnight/80">
+              <ul className="mt-4 space-y-2 text-base text-midnight/80">
                 <li>
                   <span className="font-semibold">Passengers •</span> {passengerLabel}
                 </li>
@@ -1669,7 +1693,7 @@ const ScheduleStep = ({
           </button>
           <button
             type="submit"
-            className="flex-1 rounded-full border border-horizon/50 bg-horizon py-3 text-xs font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90"
+            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-8 py-4 text-base font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90"
           >
             Continue to Passengers
           </button>
@@ -1729,7 +1753,7 @@ const PassengerStep = ({
         <div className="sm:col-span-2 flex gap-3">
           <button
             type="submit"
-            className="flex-1 rounded-full border border-horizon/50 bg-horizon py-3 text-xs font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90"
+            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-8 py-4 text-base font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90"
           >
             Continue to Review
           </button>
@@ -1788,8 +1812,9 @@ const ReviewStep = ({
   const distanceFareEnabled = shouldShowDistanceFare(trip.origin, trip.destination)
 
   const baseFare = quote?.baseFare ?? null
+  const perPassengerFee = quote?.perPassenger ?? getExtraPassengerFee(trip.origin, trip.destination)
   const extraPassengers = quote?.extraPassengers ?? Math.max(0, trip.passengerCount - 1)
-  const extraPassengerTotal = quote?.extraPassengerTotal ?? extraPassengers * ADDITIONAL_PASSENGER_FEE
+  const extraPassengerTotal = quote?.extraPassengerTotal ?? extraPassengers * perPassengerFee
   const distanceFare =
     quote?.distanceFare ??
     (groupTotal != null && baseFare != null ? Math.max(0, groupTotal - baseFare - extraPassengerTotal) : 0)
@@ -1909,13 +1934,14 @@ const ReviewStep = ({
                   <span>{formatCurrency(renderedDistanceFare)}</span>
                 </div>
               ) : null}
-              <div className="flex items-center justify-between">
-                <span>
-                  Extra passengers
-                  {extraPassengers > 0 ? ` • ${extraPassengers} × ${formatCurrency(quote?.perPassenger ?? 0)}` : ""}
-                </span>
-                <span>{formatCurrency(extraPassengerTotal)}</span>
-              </div>
+              {extraPassengerTotal > 0 ? (
+                <div className="flex items-center justify-between">
+                  <span>
+                    Extra passengers • {extraPassengers} × {formatCurrency(perPassengerFee)}
+                  </span>
+                  <span>{formatCurrency(extraPassengerTotal)}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between">
                 <label htmlFor="tip-amount" className="text-sm font-medium text-midnight/80">
                   Optional tip

@@ -3,6 +3,7 @@ import { lazy } from "react"
 import { AppShell } from "@/components/layout/AppShell"
 import type { AuthContextValue } from "@/lib/types/auth"
 import type { FirebaseServices } from "@/app/providers/FirebaseContext"
+import { ThankYouPage } from "@/pages/thank-you/ThankYouPage"
 
 const HomePage = lazy(async () => {
   const module = await import("@/pages/landing/HomePage")
@@ -144,10 +145,6 @@ const ToursPage = lazy(async () => {
   return { default: module.ToursPage }
 })
 
-const ThankYouPage = lazy(async () => {
-  const module = await import("@/pages/thank-you/ThankYouPage")
-  return { default: module.ThankYouPage }
-})
 export interface RouterContext {
   auth: AuthContextValue
   firebase: FirebaseServices

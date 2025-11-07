@@ -42,22 +42,24 @@ export const ThankYouPage = () => {
         <div className="absolute -right-36 -top-20 h-72 w-72 rounded-full bg-[#6fbfff22] blur-3xl" aria-hidden />
         <div className="absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-[#9cc6ff26] blur-3xl" aria-hidden />
         <div className="relative flex flex-col gap-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <span className="inline-flex items-center gap-2 self-start rounded-full border border-white/60 bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-horizon shadow-sm">
-              Thank you
-            </span>
-            <div className="w-32 self-center sm:self-auto md:w-40" aria-hidden>
-              <Lottie animationData={mailSentAnimation} loop autoplay />
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+            <div className="flex flex-1 flex-col gap-4">
+              <span className="inline-flex items-center gap-2 self-start rounded-full border border-white/60 bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-horizon shadow-sm">
+                Thank you
+              </span>
+              <h1 className="max-w-3xl font-heading text-4xl uppercase tracking-[0.3em] text-horizon sm:text-5xl">
+                Your Message Is Wheels Up
+              </h1>
+              <p className="max-w-2xl text-base leading-relaxed text-midnight/80">
+                We’ve routed your request directly to the Valley Airporter dispatch desk. A coordinator is
+                reviewing it now and will reach out shortly with confirmation, next steps, or a custom quote.
+                Keep your phone handy—we typically reply within 1–2 hours via email.
+              </p>
+            </div>
+            <div className="flex w-full max-w-sm items-center justify-center self-stretch rounded-3xl bg-white/40 p-4 sm:ml-auto lg:max-w-xs" aria-hidden>
+              <Lottie animationData={mailSentAnimation} loop autoplay className="h-40 w-40 md:h-48 md:w-48" />
             </div>
           </div>
-          <h1 className="max-w-3xl font-heading text-4xl uppercase tracking-[0.3em] text-horizon sm:text-5xl">
-            Your Message Is Wheels Up
-          </h1>
-          <p className="max-w-2xl text-base leading-relaxed text-midnight/80">
-            We’ve routed your request directly to the Valley Airporter dispatch desk. A coordinator is
-            reviewing it now and will reach out shortly with confirmation, next steps, or a custom quote.
-            Keep your phone handy—we typically reply within 1–2 hours via email.
-          </p>
           {paymentLink ? (
             <div className="rounded-3xl border border-white/70 bg-white/85 p-7 text-midnight shadow-inner space-y-3">
               <p className="text-base font-semibold uppercase tracking-[0.32em] text-horizon">

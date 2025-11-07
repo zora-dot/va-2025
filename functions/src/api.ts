@@ -356,8 +356,18 @@ app.post('/customers/:uid/bookings/:bookingId/pay-now', auth, requireSelfOrAdmin
       sanitizeDisplayName((data?.user as { email?: string })?.email) ||
       'Valley Airporter Customer';
 
+    const baseCentsStored = typeof payment.baseCents === 'number' && Number.isFinite(payment.baseCents) ? Math.round(payment.baseCents) : totalCents;
+    const gstCentsStored = typeof payment.gstCents === 'number' && Number.isFinite(payment.gstCents) ? Math.round(payment.gstCents) : 0;
+    const tipCentsStored = typeof payment.tipAmountCents === 'number' && Number.isFinite(payment.tipAmountCents) ? Math.round(payment.tipAmountCents) : 0;
+    const computedTotal = baseCentsStored + gstCentsStored + tipCentsStored;
+    const fareCents = computedTotal === totalCents ? baseCentsStored : totalCents;
+    const gstCents = computedTotal === totalCents ? gstCentsStored : 0;
+    const tipCents = computedTotal === totalCents ? tipCentsStored : 0;
+
     const link = await createSquarePaymentLink({
-      amountCents: totalCents,
+      fareCents,
+      gstCents,
+      tipCents,
       bookingId,
       bookingNumber,
       customerName: passengerName,
@@ -440,7 +450,10 @@ app.post('/customers/:uid/bookings/:bookingId/tip-link', auth, requireSelfOrAdmi
       'Valley Airporter Customer';
 
     const link = await createSquarePaymentLink({
-      amountCents,
+      fareCents: amountCents,
+      gstCents: 0,
+      tipCents: 0,
+      fareLabel: "Tip",
       bookingId,
       bookingNumber,
       customerName: `TIP ONLY - ${passengerName}`,
@@ -1143,8 +1156,19 @@ app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
     const scheduleSanitized = sanitizeSchedulePayload(schedule);
     const contactSanitized = sanitizeContactPayload(contact);
 
+    const createdAt = admin.firestore.FieldValue.serverTimestamp();
+    const originAddressForDisplay = sanitizeStringField(tripData.originAddress) ?? origin;
+    const destinationAddressForDisplay = sanitizeStringField(tripData.destinationAddress) ?? destination;
+
     const docData: admin.firestore.DocumentData = {
-      direction,
+      'A1 Name': contactSanitized.name ?? null,
+      'A2 origin address': originAddressForDisplay,
+      'A3 destination address': destinationAddressForDisplay,
+      'A4 Pasengers': passengers ?? null,
+      'A5 quote': amount != null ? Math.round(amount) : null,
+      'A6 email address': contactSanitized.email ?? null,
+      'A7 phone number': contactSanitized.phone ?? null,
+      'A8 createdAt': createdAt,
       origin,
       originAddress: sanitizeStringField(tripData.originAddress),
       destination,
@@ -1161,7 +1185,7 @@ app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
       flightNumber: scheduleSanitized.flightNumber,
       notes: scheduleSanitized.notes,
       lastStep: typeof lastStep === 'number' ? lastStep : 2,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       ip: getClientIp(req),
       user: req.user

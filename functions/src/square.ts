@@ -9,17 +9,23 @@ const getDefaultLocationId = () => process.env.SQUARE_LOCATION_ID || "G1W64H4NGN
 export const getSquareSecrets = () => ({ token: SQUARE_ACCESS_TOKEN });
 
 export interface PaymentLinkOptions {
-  amountCents: number;
+  fareCents: number;
+  gstCents?: number;
+  tipCents?: number;
   currency?: string;
+  fareLabel?: string;
   customerName?: string;
   bookingId: string;
   bookingNumber: number;
 }
 
 export const createSquarePaymentLink = async ({
-  amountCents,
+  fareCents,
+  gstCents = 0,
+  tipCents = 0,
   currency = "CAD",
   customerName = "Airport Shuttle",
+  fareLabel = "Shuttle Fare",
   bookingId,
   bookingNumber,
 }: PaymentLinkOptions) => {
@@ -28,6 +34,30 @@ export const createSquarePaymentLink = async ({
 
   const token = SQUARE_ACCESS_TOKEN.value();
   if (!token) throw new Error("Square access token unavailable");
+
+  const lineItems = [
+    {
+      name: fareLabel,
+      quantity: "1",
+      base_price_money: { amount: fareCents, currency },
+    },
+  ];
+
+  if (gstCents > 0) {
+    lineItems.push({
+      name: "GST (5%)",
+      quantity: "1",
+      base_price_money: { amount: gstCents, currency },
+    });
+  }
+
+  if (tipCents > 0) {
+    lineItems.push({
+      name: "Tip",
+      quantity: "1",
+      base_price_money: { amount: tipCents, currency },
+    });
+  }
 
   const response = await fetch("https://connect.squareup.com/v2/online-checkout/payment-links", {
     method: "POST",
@@ -38,11 +68,12 @@ export const createSquarePaymentLink = async ({
     },
     body: JSON.stringify({
       idempotency_key: crypto.randomUUID(),
-      quick_pay: {
-        name: `${customerName} - Form #${bookingNumber} - ${bookingId}`,
+      order: {
         location_id: locationId,
-        price_money: { amount: amountCents, currency },
-        accept_tip: true,
+        line_items: lineItems,
+      },
+      checkout_options: {
+        allow_tipping: false,
       },
       payment_note: bookingId,
     }),

@@ -125,6 +125,17 @@ const formatCurrency = (cents?: number | null, currency = "CAD") => {
   }
 };
 
+const needsVehicleLocationReminder = (origin?: string | null) => {
+  if (!origin) return false;
+  const normalized = origin.toLowerCase();
+  return (
+    normalized.includes("vancouver international airport") ||
+    normalized.includes("(yvr)") ||
+    normalized.includes("abbotsford international airport") ||
+    normalized.includes("(yxx)")
+  );
+};
+
 export const formatBookingTag = (bookingNumber?: number | null, bookingId?: string) => {
   if (typeof bookingNumber === "number" && Number.isFinite(bookingNumber)) {
     return `Booking #${bookingNumber}`;
@@ -166,16 +177,21 @@ export const buildReminderMessage = (ctx: SmsBookingContext, timing: "24h" | "10
   const tag = formatBookingTag(ctx.bookingNumber, ctx.bookingId);
   const from = formatLocation(ctx.trip?.origin ?? null, ctx.trip?.originAddress ?? null);
   const to = formatLocation(ctx.trip?.destination ?? null, ctx.trip?.destinationAddress ?? null);
+  const locationLine = needsVehicleLocationReminder(ctx.trip?.origin ?? null)
+    ? "\nPlease check your email for our vehicle location."
+    : "";
 
   if (timing === "24h") {
     return `${tag} reminder: pickup is tomorrow ${when}.
 Pickup: ${from}
 Drop-off: ${to}
+${locationLine}
 Need to cancel? Reply "STOP".`;
   }
   return `${tag} reminder: pickup today at ${when}.
 Pickup: ${from}
 Drop-off: ${to}
+${locationLine}
 Need help? Reply HELP or call ${DISPATCH_PHONE}. Reply STOP to cancel.`;
 };
 
