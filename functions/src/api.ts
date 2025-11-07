@@ -48,6 +48,58 @@ const parseTipAmountToCents = (value: unknown): number | null => {
   return null;
 };
 
+const sanitizeStringField = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const sanitizeOptionalNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return null;
+};
+
+const sanitizeVehicleSelections = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .filter((entry) => entry.length > 0);
+};
+
+const sanitizeContactPayload = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') {
+    return { name: null, email: null, phone: null, baggage: null };
+  }
+  const payload = raw as Record<string, unknown>;
+  return {
+    name: sanitizeStringField(payload.name),
+    email: sanitizeStringField(payload.email),
+    phone: sanitizeStringField(payload.phone),
+    baggage: sanitizeStringField(payload.baggage),
+  };
+};
+
+const sanitizeSchedulePayload = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object') {
+    return { pickupDate: null, pickupTime: null, flightNumber: null, notes: null };
+  }
+  const payload = raw as Record<string, unknown>;
+  return {
+    pickupDate: sanitizeStringField(payload.pickupDate),
+    pickupTime: sanitizeStringField(payload.pickupTime),
+    flightNumber: sanitizeStringField(payload.flightNumber),
+    notes: sanitizeStringField(payload.notes),
+  };
+};
+
+const getClientIp = (req: express.Request): string | null => {
+  const forwarded = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim();
+  if (forwarded) return forwarded;
+  return req.socket?.remoteAddress ?? null;
+};
+
 const customerOwnsBooking = (data: admin.firestore.DocumentData | undefined, uid: string): boolean => {
   if (!data) return false;
   const bookingUser = (data.user as { uid?: unknown }) || {};
@@ -895,6 +947,7 @@ app.post('/fares/quote', async (req, res) => {
       passenger,
       pickupDate,
       pickupTime,
+      suppressLog,
     } = (req.body || {}) as {
       direction?: TripDirection;
       origin?: string;
@@ -916,6 +969,7 @@ app.post('/fares/quote', async (req, res) => {
         email?: string | null;
         phone?: string | null;
       };
+      suppressLog?: boolean;
     };
 
     const authedReq = req as AuthedReq;
@@ -996,12 +1050,18 @@ app.post('/fares/quote', async (req, res) => {
       ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket.remoteAddress ?? null,
     };
 
+    const skipLogging = suppressLog === true;
+
     if (!pricing.baseRate) {
-      await db.collection('quoteLogs').add(quoteLogBase);
+      if (!skipLogging) {
+        await db.collection('quoteLogs').add(quoteLogBase);
+      }
       return res.status(404).json({ error: 'NO_PRICE_AVAILABLE', pricing });
     }
 
-    await db.collection('quoteLogs').add(quoteLogBase);
+    if (!skipLogging) {
+      await db.collection('quoteLogs').add(quoteLogBase);
+    }
 
     res.json(pricing);
   } catch (error) {
@@ -1010,6 +1070,170 @@ app.post('/fares/quote', async (req, res) => {
       return;
     }
     res.status(500).json({ error: 'QUOTE_FAILED' });
+  }
+});
+
+app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
+  try {
+    const { trip = {}, quote = {}, schedule = {}, contact = {}, lastStep } = (req.body || {}) as Record<string, unknown>;
+
+    const tripData = trip as Record<string, unknown>;
+    const direction = sanitizeStringField(tripData.direction);
+    const origin = sanitizeStringField(tripData.origin);
+    const destination = sanitizeStringField(tripData.destination);
+
+    if (!direction || !origin || !destination) {
+      res.status(400).json({ error: 'INVALID_TRIP' });
+      return;
+    }
+
+    const passengers =
+      sanitizeOptionalNumber(tripData.passengers) ??
+      sanitizeOptionalNumber((tripData as { passengerCount?: unknown }).passengerCount);
+    const preferredVehicle = sanitizeStringField(tripData.preferredVehicle);
+
+    const quoteData = quote as Record<string, unknown>;
+    const amount = sanitizeOptionalNumber(quoteData.amount);
+    const quoteBreakdown =
+      amount != null
+        ? {
+            baseFare: sanitizeOptionalNumber(quoteData.baseFare),
+            extraPassengers: sanitizeOptionalNumber(quoteData.extraPassengers),
+            extraPassengerTotal: sanitizeOptionalNumber(quoteData.extraPassengerTotal),
+            estimatedGst: sanitizeOptionalNumber(quoteData.estimatedGst),
+            perPassenger: sanitizeOptionalNumber(quoteData.perPassenger),
+          }
+        : null;
+
+    const scheduleSanitized = sanitizeSchedulePayload(schedule);
+    const contactSanitized = sanitizeContactPayload(contact);
+
+    const docData: admin.firestore.DocumentData = {
+      direction,
+      origin,
+      originAddress: sanitizeStringField(tripData.originAddress),
+      destination,
+      destinationAddress: sanitizeStringField(tripData.destinationAddress),
+      passengers: passengers ?? null,
+      vehicleSelections: sanitizeVehicleSelections(tripData.vehicleSelections),
+      preferredVehicle: preferredVehicle ?? null,
+      status: sanitizeStringField(tripData.status) ?? (amount != null ? 'success' : 'pending'),
+      quote: amount != null ? Math.round(amount) : null,
+      quoteBreakdown,
+      contact: contactSanitized,
+      pickupDate: scheduleSanitized.pickupDate,
+      pickupTime: scheduleSanitized.pickupTime,
+      flightNumber: scheduleSanitized.flightNumber,
+      notes: scheduleSanitized.notes,
+      lastStep: typeof lastStep === 'number' ? lastStep : 2,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ip: getClientIp(req),
+      user: req.user
+        ? {
+            uid: req.user.uid,
+            email: req.user.email ?? null,
+          }
+        : null,
+    };
+
+    const ref = await db.collection('quoteLogs').add(docData);
+    res.status(201).json({ id: ref.id });
+  } catch (error) {
+    console.error('quoteLogs:create failed', error);
+    res.status(500).json({ error: 'QUOTE_LOG_CREATE_FAILED' });
+  }
+});
+
+app.patch('/quoteLogs/:logId', optionalAuth, async (req: AuthedReq, res) => {
+  try {
+    const { logId } = req.params as { logId?: string };
+    if (!logId) {
+      res.status(400).json({ error: 'INVALID_LOG_ID' });
+      return;
+    }
+
+    const { trip, quote, schedule, contact, lastStep, booking } = (req.body || {}) as Record<string, unknown>;
+
+    const updates: admin.firestore.UpdateData<admin.firestore.DocumentData> = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (trip && typeof trip === 'object') {
+      const tripData = trip as Record<string, unknown>;
+      const direction = sanitizeStringField(tripData.direction);
+      const origin = sanitizeStringField(tripData.origin);
+      const destination = sanitizeStringField(tripData.destination);
+      if (direction) updates.direction = direction;
+      if (origin) updates.origin = origin;
+      if (tripData.originAddress !== undefined) {
+        updates.originAddress = sanitizeStringField(tripData.originAddress);
+      }
+      if (destination) updates.destination = destination;
+      if (tripData.destinationAddress !== undefined) {
+        updates.destinationAddress = sanitizeStringField(tripData.destinationAddress);
+      }
+      if (tripData.passengers !== undefined) {
+        updates.passengers = sanitizeOptionalNumber(tripData.passengers);
+      }
+      if (tripData.vehicleSelections !== undefined) {
+        updates.vehicleSelections = sanitizeVehicleSelections(tripData.vehicleSelections);
+      }
+      if (tripData.preferredVehicle !== undefined) {
+        updates.preferredVehicle = sanitizeStringField(tripData.preferredVehicle);
+      }
+      if (tripData.status !== undefined) {
+        updates.status = sanitizeStringField(tripData.status);
+      }
+    }
+
+    if (quote && typeof quote === 'object') {
+      const quoteData = quote as Record<string, unknown>;
+      const amount = sanitizeOptionalNumber(quoteData.amount);
+      updates.quote = amount != null ? Math.round(amount) : null;
+      updates.quoteBreakdown =
+        amount != null
+          ? {
+              baseFare: sanitizeOptionalNumber(quoteData.baseFare),
+              extraPassengers: sanitizeOptionalNumber(quoteData.extraPassengers),
+              extraPassengerTotal: sanitizeOptionalNumber(quoteData.extraPassengerTotal),
+              estimatedGst: sanitizeOptionalNumber(quoteData.estimatedGst),
+              perPassenger: sanitizeOptionalNumber(quoteData.perPassenger),
+            }
+          : null;
+    }
+
+    if (schedule !== undefined) {
+      const scheduleSanitized = sanitizeSchedulePayload(schedule);
+      updates.pickupDate = scheduleSanitized.pickupDate;
+      updates.pickupTime = scheduleSanitized.pickupTime;
+      updates.flightNumber = scheduleSanitized.flightNumber;
+      updates.notes = scheduleSanitized.notes;
+    }
+
+    if (contact !== undefined) {
+      updates.contact = sanitizeContactPayload(contact);
+    }
+
+    if (typeof lastStep === 'number') {
+      updates.lastStep = lastStep;
+    }
+
+    if (booking && typeof booking === 'object') {
+      const bookingData = booking as Record<string, unknown>;
+      updates.booking = {
+        id: sanitizeStringField(bookingData.id),
+        paymentPreference: sanitizeStringField(bookingData.paymentPreference),
+        paymentLink: sanitizeStringField(bookingData.paymentLink),
+        tipAmount: sanitizeOptionalNumber(bookingData.tipAmount),
+      };
+    }
+
+    await db.collection('quoteLogs').doc(logId).set(updates, { merge: true });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('quoteLogs:update failed', error);
+    res.status(500).json({ error: 'QUOTE_LOG_UPDATE_FAILED' });
   }
 });
 
