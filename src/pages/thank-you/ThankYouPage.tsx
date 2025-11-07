@@ -1,6 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router"
 import { GlassPanel } from "@/components/ui/GlassPanel"
 import { Plane, MapPin, Phone, Sparkles, Share2 } from "lucide-react"
+import Lottie from "lottie-react"
+import mailSentAnimation from "@/lotties/mail-sent.json"
 
 export const ThankYouPage = () => {
   const { location } = useRouterState()
@@ -40,9 +42,14 @@ export const ThankYouPage = () => {
         <div className="absolute -right-36 -top-20 h-72 w-72 rounded-full bg-[#6fbfff22] blur-3xl" aria-hidden />
         <div className="absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-[#9cc6ff26] blur-3xl" aria-hidden />
         <div className="relative flex flex-col gap-6">
-          <span className="inline-flex items-center gap-2 self-start rounded-full border border-white/60 bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-horizon shadow-sm">
-            Thank you
-          </span>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <span className="inline-flex items-center gap-2 self-start rounded-full border border-white/60 bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-horizon shadow-sm">
+              Thank you
+            </span>
+            <div className="w-32 self-center sm:self-auto md:w-40" aria-hidden>
+              <Lottie animationData={mailSentAnimation} loop autoplay />
+            </div>
+          </div>
           <h1 className="max-w-3xl font-heading text-4xl uppercase tracking-[0.3em] text-horizon sm:text-5xl">
             Your Message Is Wheels Up
           </h1>

@@ -1073,6 +1073,41 @@ app.post('/fares/quote', async (req, res) => {
   }
 });
 
+app.post('/price', async (req, res) => {
+  try {
+    const payload = (req.body || {}) as {
+      distanceKm?: number;
+      timeMin?: number;
+      surge?: number;
+      discountPct?: number;
+    };
+
+    const coerceNumber = (value: number | undefined, fallback: number) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    const distanceKm = Math.max(0, coerceNumber(payload.distanceKm, 10));
+    const timeMin = Math.max(0, coerceNumber(payload.timeMin, 20));
+    const surge = Math.max(0.1, coerceNumber(payload.surge, 1));
+    const discountPct = Math.min(100, Math.max(0, coerceNumber(payload.discountPct, 0)));
+
+    const base = 5;
+    const perKm = 1.8;
+    const perMin = 0.4;
+
+    let total = (base + perKm * distanceKm + perMin * timeMin) * surge;
+    if (discountPct > 0) {
+      total = total * (1 - discountPct / 100);
+    }
+
+    res.json({ total: Number(total.toFixed(2)), currency: 'CAD' });
+  } catch (error) {
+    console.error('price: failed to calculate', error);
+    res.status(400).json({ error: 'Bad request' });
+  }
+});
+
 app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
   try {
     const { trip = {}, quote = {}, schedule = {}, contact = {}, lastStep } = (req.body || {}) as Record<string, unknown>;

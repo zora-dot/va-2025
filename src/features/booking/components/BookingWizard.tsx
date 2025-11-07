@@ -5,6 +5,12 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { FirebaseError } from "firebase/app"
 import { useNavigate } from "@tanstack/react-router"
 import { GlassPanel } from "@/components/ui/GlassPanel"
+import DispatchAlchemist from "@/components/DispatchAlchemist"
+import carsAnimation from "@/lotties/loading-car.json"
+import driverAnimation from "@/lotties/driver.json"
+import confettiAnimation from "@/lotties/confetti.json"
+import calculatorAnimation from "@/lotties/booking-calculator.json"
+import finalizerAnimation from "@/lotties/finalize-spinner.json"
 import {
   calculatePricing,
   getDestinationsForOrigin,
@@ -556,11 +562,9 @@ export const BookingWizard = () => {
     if (submitted || submittingBooking) return
     if (!tripData || !scheduleData || !passengerData) return
 
-    const baseEstimate = pricing?.baseRate ?? null
-    const gstEstimate = estimatedQuote?.estimatedGst ?? 0
-    const estimatedTotalForState =
-      baseEstimate != null ? baseEstimate + (paymentPreference === "pay_now" ? gstEstimate : 0) : null
     const safeTip = Number.isFinite(tipAmount) ? Math.max(0, tipAmount) : 0
+    const baseEstimate = pricing?.baseRate ?? null
+    const estimatedTotalForState = baseEstimate != null ? baseEstimate + safeTip : null
 
     const preferredVehicle =
       tripData.vehicleSelections.some((selection) => vehiclePreferenceMap[selection] === "van") ?
@@ -708,7 +712,11 @@ export const BookingWizard = () => {
     (next: StepKey, options?: { reset?: boolean; scroll?: boolean }) => {
       if (options?.scroll) {
         requestAnimationFrame(() => {
-          stepHeaderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+          const target = stepHeaderRef.current
+          if (!target) return
+          const rect = target.getBoundingClientRect()
+          const top = rect.top + window.scrollY - 120
+          window.scrollTo({ top, behavior: "smooth" })
         })
       }
       if (next < 4) {
@@ -1335,10 +1343,19 @@ const PriceQuoteStep = ({
   loading?: boolean
   error?: string | null
 }) => {
+  const [animationComplete, setAnimationComplete] = useState(false)
   const waitingForQuote = Boolean(loading && (!pricing || !quote))
   const quoteAvailable = Boolean(!waitingForQuote && quote && pricing?.baseRate != null)
   const passengerLabel =
     trip.passengerCount === 1 ? "1 passenger" : `${trip.passengerCount} passengers`
+  const selectedVehicles = useMemo(
+    () => trip.vehicleSelections.map((id) => vehicleLabelMap[id] ?? id).join(", "),
+    [trip.vehicleSelections],
+  )
+  const vehicleSignature = useMemo(
+    () => trip.vehicleSelections.join("|"),
+    [trip.vehicleSelections],
+  )
   const instantQuote =
     quoteAvailable ?
       quote?.baseRate ?? pricing?.baseRate ?? null :
@@ -1346,83 +1363,181 @@ const PriceQuoteStep = ({
   const roundedInstantQuote = instantQuote != null ? Math.round(instantQuote) : null
   const distanceFareEnabled = shouldShowDistanceFare(trip.origin, trip.destination)
 
+  const surgeGuess = trip.direction === "From the Airport" ? 1.1 : 1
+  const discountGuess = trip.passengerCount >= 4 ? 5 : 0
+
+  const runAnimatedQuote = useCallback(async () => {
+    const payload = {
+      distanceKm: Math.max(10, trip.passengerCount * 8), // TODO: inject route distance from Step 1
+      timeMin: Math.max(20, trip.passengerCount * 4), // TODO: inject drive time from Step 1
+      surge: surgeGuess,
+      discountPct: discountGuess,
+    }
+
+    try {
+      const apiResult = await apiFetch<{ total?: number; currency?: string }>("/price", {
+        method: "POST",
+        body: payload,
+        skipAuth: true,
+      })
+      const resolvedTotal = roundedInstantQuote ?? apiResult.total ?? 0
+      return {
+        total: resolvedTotal,
+        currency: apiResult.currency ?? "CAD",
+      }
+    } catch (fetchError) {
+      console.error("DispatchAlchemist: calculatePrice failed", fetchError)
+      return {
+        total: roundedInstantQuote ?? 0,
+        currency: "CAD",
+      }
+    }
+  }, [discountGuess, roundedInstantQuote, surgeGuess, trip.passengerCount])
+
+  const handleComplete = useCallback(() => {
+    setAnimationComplete(true)
+  }, [])
+
+  useEffect(() => {
+    setAnimationComplete(false)
+  }, [
+    trip.direction,
+    trip.origin,
+    trip.destination,
+    trip.passengerCount,
+    vehicleSignature,
+  ])
+  const showDetails = animationComplete
+
   return (
-    <GlassPanel className="p-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em] text-horizon">
+    <GlassPanel className="p-8 space-y-8">
+      <div className="flex flex-wrap items-center gap-3 text-horizon pt-1 mb-4">
+        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em]">
           {trip.origin}
         </span>
-        <span className="text-sm font-semibold text-horizon">→</span>
-        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em] text-horizon">
+        <span className="text-sm font-semibold">→</span>
+        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em]">
           {trip.destination}
         </span>
-        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em] text-horizon">
+        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em]">
           {passengerLabel}
         </span>
       </div>
 
-      <div className="mt-8 grid gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-horizon/70">Instant quote</p>
-          <p className="mt-2 text-4xl font-bold text-horizon">
-            {roundedInstantQuote != null ? formatCurrency(roundedInstantQuote) : "—"}
-          </p>
-          {waitingForQuote ? (
-            <p className="mt-2 text-xs uppercase tracking-[0.28em] text-midnight/50">Calculating live quote…</p>
-          ) : null}
-          {!waitingForQuote && error ? (
-            <p className="mt-2 text-xs uppercase tracking-[0.28em] text-ember/70">{error}</p>
-          ) : null}
-        </div>
-
-        <div className="rounded-2xl border border-horizon/15 bg-white/75 p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Quote details</p>
-          {waitingForQuote ? (
-            <p className="mt-3 text-sm uppercase tracking-[0.28em] text-midnight/60">Calculating live quote…</p>
-          ) : quoteAvailable ? (
-            <div className="mt-3 space-y-2 text-sm text-midnight/80">
-              <div className="flex items-center justify-between">
-                <span>Base fare</span>
-                <span>{formatCurrency(quote!.baseFare)}</span>
-              </div>
-              {distanceFareEnabled ? (
-                <div className="flex items-center justify-between">
-                  <span>Distance fare</span>
-                  <span>{formatCurrency(quote!.distanceFare)}</span>
-                </div>
-              ) : null}
-              <div className="flex items-center justify-between">
-                <span>
-                  Extra passengers{" "}
-                  {quote!.extraPassengers > 0 ? `• ${quote!.extraPassengers} × ${formatCurrency(quote!.perPassenger)}` : ""}
-                </span>
-                <span>{formatCurrency(quote!.extraPassengerTotal)}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-3 space-y-2 text-sm text-midnight/70">
-              <p>We couldn’t calculate an instant fare for this route.</p>
-              <p>
-                Please adjust the trip details or call dispatch at{" "}
-                <a className="font-semibold text-horizon underline" href="tel:+16047516688">
-                  (604) 751-6688
-                </a>
-                .
-              </p>
-            </div>
-          )}
-        </div>
+      <div className="flex justify-center py-4">
+        <DispatchAlchemist
+          carsAnimation={carsAnimation}
+          driverAnimation={driverAnimation}
+          confettiAnimation={confettiAnimation}
+          calculatorAnimation={calculatorAnimation}
+          finalizerAnimation={finalizerAnimation}
+          messages={[
+            "working magic...",
+            "checking surge & demand...",
+            "applying available discounts...",
+            "gathering the drivers...",
+            "gathering the vehicles...",
+          ]}
+          calculatePrice={runAnimatedQuote}
+          theme={{
+            progressColor: "#7c3aed",
+            ticketFrom: "#0b1220",
+            ticketTo: "#1c2540",
+            glowFrom: "#eef2ff",
+            glowVia: "#faf5ff",
+            glowTo: "#fff1f2",
+          }}
+          onComplete={handleComplete}
+        />
       </div>
 
-      <div className="mt-8 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onContinue}
-          disabled={!quoteAvailable}
-          className="flex-1 rounded-full bg-horizon px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-horizon/90 disabled:cursor-not-allowed disabled:bg-horizon/40 md:flex-none md:px-10"
-        >
-          Continue to Pickup Schedule
-        </button>
+      <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+        {showDetails ? (
+          <>
+            <div className="rounded-3xl border border-horizon/15 bg-white/90 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Quote details</p>
+              {waitingForQuote ? (
+                <p className="mt-3 text-sm uppercase tracking-[0.28em] text-midnight/60">Calculating live quote…</p>
+              ) : quoteAvailable ? (
+                <div className="mt-3 space-y-3 text-sm text-midnight/80">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">Base fare</span>
+                    <span>{formatCurrency(quote!.baseFare)}</span>
+                  </div>
+                  {distanceFareEnabled ? (
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Distance fare</span>
+                      <span>{formatCurrency(quote!.distanceFare)}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">
+                      Extra passengers{" "}
+                      {quote!.extraPassengers > 0 ?
+                        `• ${quote!.extraPassengers} × ${formatCurrency(quote!.perPassenger)}` :
+                        ""}
+                    </span>
+                    <span>{formatCurrency(quote!.extraPassengerTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-horizon/10 pt-3 text-base font-semibold">
+                    <span>Final Total</span>
+                    <span>{roundedInstantQuote != null ? formatCurrency(roundedInstantQuote) : "—"}</span>
+                  </div>
+                  {quoteAvailable ? (
+                    <button
+                      type="button"
+                      onClick={onContinue}
+                      className="mt-6 w-full rounded-full bg-horizon px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-horizon/90"
+                    >
+                      Continue to Pickup Schedule
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2 text-sm text-midnight/70">
+                  <p>We couldn’t calculate an instant fare for this route.</p>
+                  <p>
+                    Please adjust the trip details or call dispatch at{" "}
+                    <a className="font-semibold text-horizon underline" href="tel:+16047516688">
+                      (604) 751-6688
+                    </a>
+                    .
+                  </p>
+                </div>
+              )}
+              {!waitingForQuote && error ? (
+                <p className="mt-3 text-xs uppercase tracking-[0.28em] text-ember/70">{error}</p>
+              ) : null}
+            </div>
+
+            <div className="rounded-3xl border border-horizon/10 bg-white/80 p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">
+                Trip checklist
+              </p>
+              <ul className="mt-4 space-y-2 text-sm text-midnight/80">
+                <li>
+                  <span className="font-semibold">Passengers •</span> {passengerLabel}
+                </li>
+                <li>
+                  <span className="font-semibold">From •</span> {trip.origin}
+                </li>
+                <li>
+                  <span className="font-semibold">To •</span> {trip.destination}
+                </li>
+                <li>
+                  <span className="font-semibold">Vehicle type •</span> {selectedVehicles}
+                </li>
+              </ul>
+            </div>
+          </>
+        ) : (
+          <div className="col-span-full rounded-3xl border border-horizon/10 bg-white/80 p-6 mt-4 text-center text-sm text-midnight/70">
+            The Dispatch Alchemist is working. Quote details will appear once the ticket flips.
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-3 pt-2">
         <button
           type="button"
           onClick={onEditTrip}
@@ -1448,7 +1563,6 @@ const ScheduleStep = ({
   const pickupPeriod = watch("pickupPeriod")
 
   const minSelectableDate = useMemo(() => format(addHours(new Date(), MIN_ADVANCE_HOURS), "yyyy-MM-dd"), [])
-  const softNoticeDate = useMemo(() => addHours(new Date(), SOFT_NOTICE_HOURS), [])
 
   const hourOptions = useMemo(
     () => Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0")),
@@ -1470,9 +1584,6 @@ const ScheduleStep = ({
       <h2 className="font-heading text-xl uppercase tracking-[0.3em] text-horizon">
         Pickup Schedule
       </h2>
-      <p className="mt-2 text-xs text-midnight/70">
-        Next available online pickup: {format(softNoticeDate, "PPP • p")}
-      </p>
       <form className="mt-6 grid gap-4 sm:grid-cols-2" onSubmit={onSubmit}>
         <Field label="Pickup Date" error={formState.errors.pickupDate?.message}>
           <input
@@ -1683,12 +1794,9 @@ const ReviewStep = ({
     quote?.distanceFare ??
     (groupTotal != null && baseFare != null ? Math.max(0, groupTotal - baseFare - extraPassengerTotal) : 0)
   const renderedDistanceFare = distanceFareEnabled ? distanceFare : 0
-  const estimatedGst = quote?.estimatedGst ?? 0
   const groupTotal = quote?.baseRate ?? pricing?.baseRate ?? null
   const safeTip = Number.isFinite(tipAmount) ? Math.max(0, tipAmount) : 0
-  const showGst = paymentPreference === "pay_now"
-  const gstForDisplay = showGst ? estimatedGst : 0
-  const finalTotal = groupTotal != null ? groupTotal + gstForDisplay + safeTip : null
+  const finalTotal = groupTotal != null ? groupTotal + safeTip : null
   const roundedFinalTotal = finalTotal != null ? Math.round(finalTotal) : null
   const confirmLabel =
     submitted ?
@@ -1808,12 +1916,6 @@ const ReviewStep = ({
                 </span>
                 <span>{formatCurrency(extraPassengerTotal)}</span>
               </div>
-              {showGst ? (
-                <div className="flex items-center justify-between">
-                  <span>Estimated GST (5%)</span>
-                  <span>{formatCurrency(gstForDisplay)}</span>
-                </div>
-              ) : null}
               <div className="flex items-center justify-between">
                 <label htmlFor="tip-amount" className="text-sm font-medium text-midnight/80">
                   Optional tip
@@ -1951,11 +2053,11 @@ const Field = ({
 }) => (
   <div className={clsx("flex flex-col gap-2", className)}>
     <span className="text-xs font-semibold uppercase tracking-[0.3em] text-horizon/80">{label}</span>
-    {children}
+    {error ? <div className="field-error-control">{children}</div> : children}
     {helper ? (
       <span className="text-base text-midnight/70">{helper}</span>
     ) : null}
-    {error ? <span className="text-xs text-ember">{error}</span> : null}
+    {error ? <span className="field-error-text text-xs">{error}</span> : null}
   </div>
 )
 

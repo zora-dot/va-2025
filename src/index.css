@@ -118,6 +118,26 @@
 }
 
 @layer components {
+  .field-error-control input,
+  .field-error-control select,
+  .field-error-control textarea,
+  .field-error-control .pac-target-input {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.2);
+  }
+
+  .field-error-control input:focus,
+  .field-error-control select:focus,
+  .field-error-control textarea:focus,
+  .field-error-control .pac-target-input:focus {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.35);
+  }
+
+  .field-error-text {
+    color: #dc2626 !important;
+    font-weight: 600;
+  }
   .va-button {
     @apply inline-flex items-center justify-center gap-2 rounded-pill px-5 py-2 text-xs font-semibold uppercase tracking-[0.32em] transition duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-glacier/30 disabled:cursor-not-allowed disabled:opacity-60;
     box-shadow: var(--va-shadow-soft);
