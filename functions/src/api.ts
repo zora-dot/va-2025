@@ -1146,10 +1146,12 @@ app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
       amount != null
         ? {
             baseFare: sanitizeOptionalNumber(quoteData.baseFare),
+            distanceFare: sanitizeOptionalNumber(quoteData.distanceFare),
             extraPassengers: sanitizeOptionalNumber(quoteData.extraPassengers),
             extraPassengerTotal: sanitizeOptionalNumber(quoteData.extraPassengerTotal),
             estimatedGst: sanitizeOptionalNumber(quoteData.estimatedGst),
             perPassenger: sanitizeOptionalNumber(quoteData.perPassenger),
+            vehiclePremium: sanitizeOptionalNumber(quoteData.vehiclePremium),
           }
         : null;
 
@@ -1254,10 +1256,12 @@ app.patch('/quoteLogs/:logId', optionalAuth, async (req: AuthedReq, res) => {
         amount != null
           ? {
               baseFare: sanitizeOptionalNumber(quoteData.baseFare),
+              distanceFare: sanitizeOptionalNumber(quoteData.distanceFare),
               extraPassengers: sanitizeOptionalNumber(quoteData.extraPassengers),
               extraPassengerTotal: sanitizeOptionalNumber(quoteData.extraPassengerTotal),
               estimatedGst: sanitizeOptionalNumber(quoteData.estimatedGst),
               perPassenger: sanitizeOptionalNumber(quoteData.perPassenger),
+              vehiclePremium: sanitizeOptionalNumber(quoteData.vehiclePremium),
             }
           : null;
     }

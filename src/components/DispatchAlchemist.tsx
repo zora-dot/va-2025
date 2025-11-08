@@ -135,7 +135,7 @@ export default function DispatchAlchemist({
   const flipCardStyle: CSSProperties = { transformStyle: "preserve-3d" };
   const ticketFaceStyle: CSSProperties = { backfaceVisibility: "hidden" };
   const showCalculator = !revealed && !isFinalizing;
-  const showFinalizer = !revealed && isFinalizing;
+  const showFinalizer = false;
 
   const skip = () => {
     setElapsed(durationMs);
@@ -225,23 +225,15 @@ export default function DispatchAlchemist({
           >
             <div className="relative flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center">
               {showCalculator ? (
-                <div className="w-48 md:w-56">
-                  <Lottie animationData={calculatorAnimation} loop autoplay />
-                </div>
-              ) : null}
-              {!showFinalizer ? (
-                <div className="text-sm text-slate-500">Crunching the route details…</div>
-              ) : null}
-              {showFinalizer ? (
                 <>
-                  <div className="absolute inset-0">
-                    <Lottie animationData={finalizerAnimation} loop autoplay style={{ width: "100%", height: "100%" }} />
+                  <div className="w-64 md:w-80">
+                    <Lottie animationData={calculatorAnimation} loop autoplay />
                   </div>
-                  <div className="relative z-10 text-base font-semibold text-white drop-shadow-lg">
-                    Locking in your fare…
-                  </div>
+                  <div className="text-base font-semibold text-slate-600">Crunching the route details…</div>
                 </>
-              ) : null}
+              ) : (
+                <div className="text-base font-semibold text-slate-600">Locking in your fare…</div>
+              )}
             </div>
           </div>
           <div

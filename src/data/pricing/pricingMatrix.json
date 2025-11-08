@@ -1565,6 +1565,24 @@
           "12-14": 250
         },
         "distanceRule": null
+      },
+      {
+        "destination": "Vancouver International Airport (YVR)",
+        "label": "To/From Vancouver Airport",
+        "baseFare": 90,
+        "rates": {
+          "1": 90,
+          "2": 100,
+          "3": 110,
+          "4": 120,
+          "5": 130,
+          "6": 140,
+          "6v": 175,
+          "7v": 175,
+          "8-11": 225,
+          "12-14": 325
+        },
+        "distanceRule": null
       }
     ]
   },

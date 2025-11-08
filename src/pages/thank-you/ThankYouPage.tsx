@@ -10,7 +10,6 @@ export const ThankYouPage = () => {
     | {
         paymentLink?: unknown
         total?: unknown
-        bookingId?: unknown
         bookingNumber?: unknown
         paymentPreference?: unknown
       }
@@ -18,7 +17,6 @@ export const ThankYouPage = () => {
 
   const paymentLink = typeof routerState?.paymentLink === "string" ? routerState.paymentLink : null
   const bookingTotalRaw = typeof routerState?.total === "number" ? routerState.total : null
-  const bookingId = typeof routerState?.bookingId === "string" ? routerState.bookingId : null
   const bookingNumber = typeof routerState?.bookingNumber === "number" ? routerState.bookingNumber : null
   const paymentPreference =
     routerState?.paymentPreference === "pay_on_arrival" || routerState?.paymentPreference === "pay_now"
@@ -56,8 +54,8 @@ export const ThankYouPage = () => {
                 Keep your phone handy—we typically reply within 1–2 hours via email.
               </p>
             </div>
-            <div className="flex w-full max-w-sm items-center justify-center self-stretch rounded-3xl bg-white/40 p-4 sm:ml-auto lg:max-w-xs" aria-hidden>
-              <Lottie animationData={mailSentAnimation} loop autoplay className="h-40 w-40 md:h-48 md:w-48" />
+            <div className="flex w-full max-w-md items-center justify-center self-stretch rounded-3xl bg-white/40 p-6 sm:ml-auto lg:max-w-md" aria-hidden>
+              <Lottie animationData={mailSentAnimation} loop autoplay className="h-56 w-56 md:h-72 md:w-72" />
             </div>
           </div>
           {paymentLink ? (
@@ -70,9 +68,6 @@ export const ThankYouPage = () => {
               </p>
               {formattedTotal ? (
                 <p className="text-lg font-semibold text-horizon">Amount: {formattedTotal}</p>
-              ) : null}
-              {bookingId ? (
-                <p className="text-base text-midnight/70">Reference ID: {bookingId}</p>
               ) : null}
               {bookingNumber != null ? (
                 <p className="text-base text-midnight/70">Form #: {bookingNumber}</p>

@@ -58,6 +58,9 @@ const LOCATION_CATEGORY_ORDER = [
   "Metro Areas",
 ] as const
 
+const STEP_SCROLL_BUFFER = 12
+const APP_HEADER_SELECTOR = "[data-app-header]"
+
 const normalizeLocationLabel = (label: string) =>
   label
     .toLowerCase()
@@ -204,6 +207,10 @@ const vehiclePreferenceMap: Record<VehicleOptionId, "standard" | "van"> = {
   freightlinerSprinter: "van",
 }
 
+const largeVehicleIds = new Set<VehicleOptionId>(["chevyExpress", "mercedesSprinter", "freightlinerSprinter"])
+const hasLargeVehicleSelection = (selections: VehicleOptionId[]) =>
+  selections.some((selection) => largeVehicleIds.has(selection))
+
 const determineVehicleOption = (passengerCount: number): VehicleOptionId => {
   if (passengerCount >= 12) return "freightlinerSprinter"
   if (passengerCount >= 8) return "mercedesSprinter"
@@ -293,6 +300,7 @@ export const BookingWizard = () => {
   const [tipAmount, setTipAmount] = useState<number>(0)
   const [paymentPreference, setPaymentPreference] = useState<"pay_on_arrival" | "pay_now">("pay_on_arrival")
   const [quoteLogId, setQuoteLogId] = useState<string | null>(null)
+  const quoteLogIdRef = useRef<string | null>(null)
   const [remotePricing, setRemotePricing] = useState<PricingResult | null>(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
@@ -306,41 +314,48 @@ export const BookingWizard = () => {
 
   const scheduleDefaults = useMemo(() => buildScheduleDefaults(SOFT_NOTICE_HOURS), [])
 
-  const createQuoteLog = useCallback(
-    async (payload: Record<string, unknown>) => {
-      try {
-        const response = await apiFetch<{ id: string }>("/quoteLogs", {
-          method: "POST",
-          body: payload,
-          skipAuth: true,
-        })
-        if (response?.id) {
-          setQuoteLogId(response.id)
-          return response.id
-        }
-      } catch (error) {
-        console.error("Failed to create quote log", error)
-      }
-      return null
-    },
-    [],
-  )
+  const creatingQuoteLogRef = useRef(false)
 
-  const updateQuoteLog = useCallback(
-    async (payload: Record<string, unknown>) => {
-      if (!quoteLogId) return
-      try {
-        await apiFetch(`/quoteLogs/${quoteLogId}`, {
-          method: "PATCH",
-          body: payload,
-          skipAuth: true,
-        })
-      } catch (error) {
-        console.error("Failed to update quote log", error)
+  useEffect(() => {
+    quoteLogIdRef.current = quoteLogId
+  }, [quoteLogId])
+
+  const createQuoteLog = useCallback(async (payload: Record<string, unknown>) => {
+    if (quoteLogIdRef.current) return quoteLogIdRef.current
+    if (creatingQuoteLogRef.current) return quoteLogIdRef.current
+    creatingQuoteLogRef.current = true
+    try {
+      const response = await apiFetch<{ id: string }>("/quoteLogs", {
+        method: "POST",
+        body: payload,
+        skipAuth: true,
+      })
+      if (response?.id) {
+        quoteLogIdRef.current = response.id
+        setQuoteLogId(response.id)
+        return response.id
       }
-    },
-    [quoteLogId],
-  )
+    } catch (error) {
+      console.error("Failed to create quote log", error)
+    } finally {
+      creatingQuoteLogRef.current = false
+    }
+    return quoteLogIdRef.current
+  }, [])
+
+  const updateQuoteLog = useCallback(async (payload: Record<string, unknown>) => {
+    const targetId = quoteLogIdRef.current
+    if (!targetId) return
+    try {
+      await apiFetch(`/quoteLogs/${targetId}`, {
+        method: "PATCH",
+        body: payload,
+        skipAuth: true,
+      })
+    } catch (error) {
+      console.error("Failed to update quote log", error)
+    }
+  }, [])
 
   const tripForm = useForm<TripForm>({
     resolver: tripResolver,
@@ -410,11 +425,13 @@ export const BookingWizard = () => {
         if ((error as Error).name === "AbortError") return
         console.error("Failed to refresh live pricing", error)
         setRemotePricing(null)
-        setQuoteError(
-          error instanceof Error ?
-            error.message :
-            "We couldn’t reach live pricing. Showing base rates instead.",
-        )
+        const fallbackMessage =
+          error instanceof Error && /api base url/i.test(error.message) ?
+            "Live pricing is temporarily offline. Showing base rates instead." :
+            error instanceof Error ?
+              error.message :
+              "We couldn’t reach live pricing. Showing base rates instead."
+        setQuoteError(fallbackMessage)
       } finally {
         if (!active) return
         setQuoteLoading(false)
@@ -466,8 +483,10 @@ export const BookingWizard = () => {
     const extraPassengerTotal = extraPassengers * perPassengerFee
     const roundedBaseRate = Math.round(baseRate)
     const usesDistanceFare = shouldShowDistanceFare(tripData.origin, tripData.destination)
-    const rawDistanceFare = roundedBaseRate - baseFare - extraPassengerTotal
-    const distanceFare = usesDistanceFare ? Math.max(0, Math.round(rawDistanceFare * 100) / 100) : 0
+    const additionalCharges = Math.max(0, roundedBaseRate - baseFare - extraPassengerTotal)
+    const distanceFare = usesDistanceFare ? Math.max(0, roundToCents(additionalCharges)) : 0
+    const largeVehicleSelected = hasLargeVehicleSelection(tripData.vehicleSelections)
+    const vehiclePremium = largeVehicleSelected ? Math.max(0, roundToCents(additionalCharges - distanceFare)) : 0
     const estimatedGst = Math.round(roundedBaseRate * 0.05 * 100) / 100
     return {
       baseRate: roundedBaseRate,
@@ -477,6 +496,7 @@ export const BookingWizard = () => {
       extraPassengerTotal,
       perPassenger: perPassengerFee,
       estimatedGst,
+      vehiclePremium,
     }
   }, [pricing, tripData])
 
@@ -726,9 +746,20 @@ export const BookingWizard = () => {
     estimatedQuote,
   ])
 
-  const scrollToStepHeader = () => {
-    stepHeaderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-  }
+  const scrollToStepHeader = useCallback(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return
+    const anchor = stepHeaderRef.current
+    if (!anchor) return
+
+    const header = document.querySelector<HTMLElement>(APP_HEADER_SELECTOR)
+    const headerStyles = header ? getComputedStyle(header) : null
+    const headerPosition = headerStyles?.position ?? ""
+    const headerIsOverlay = headerPosition === "fixed" || headerPosition === "sticky"
+    const headerOffset = header && headerIsOverlay ? header.getBoundingClientRect().height : 0
+
+    const targetTop = anchor.getBoundingClientRect().top + window.scrollY - headerOffset - STEP_SCROLL_BUFFER
+    window.scrollTo({ top: Math.max(targetTop, 0), behavior: "smooth" })
+  }, [])
 
   const goToStep = useCallback(
     (next: StepKey, options?: { reset?: boolean; scroll?: boolean }) => {
@@ -774,6 +805,7 @@ export const BookingWizard = () => {
     setTipAmount(0)
     setPaymentPreference("pay_on_arrival")
     setQuoteLogId(null)
+    quoteLogIdRef.current = null
     setRemotePricing(null)
     setQuoteError(null)
     setQuoteLoading(false)
@@ -859,6 +891,7 @@ export const BookingWizard = () => {
               extraPassengerTotal: estimatedQuote?.extraPassengerTotal ?? null,
               estimatedGst: estimatedQuote?.estimatedGst ?? null,
               perPassenger: estimatedQuote?.perPassenger ?? null,
+              vehiclePremium: estimatedQuote?.vehiclePremium ?? null,
             }
           : { amount: null },
       lastStep: 2,
@@ -1270,9 +1303,22 @@ const TripStep = ({
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-2">
-                        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-horizon">
-                          {option.label}
-                        </p>
+                        {(() => {
+                          const [title, restRaw] = option.label.split("(")
+                          const rest = restRaw ? restRaw.replace(/\)+$/, "").trim() : null
+                          return (
+                            <>
+                              <p className="text-base font-semibold uppercase tracking-[0.2em] text-horizon">
+                                {title.trim()}
+                              </p>
+                              {rest ? (
+                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-horizon/70">
+                                  ({rest})
+                                </p>
+                              ) : null}
+                            </>
+                          )
+                        })()}
                         <p className="text-sm text-midnight/70">{option.helper}</p>
                       </div>
                       <div className="flex flex-none items-start justify-end">
@@ -1343,6 +1389,8 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value)
 
+const roundToCents = (value: number) => Math.round(value * 100) / 100
+
 const PriceQuoteStep = ({
   trip,
   pricing,
@@ -1362,6 +1410,7 @@ const PriceQuoteStep = ({
     extraPassengerTotal: number
     perPassenger: number
     estimatedGst: number
+    vehiclePremium: number
   } | null
   onEditTrip: () => void
   onContinue: () => void
@@ -1387,6 +1436,7 @@ const PriceQuoteStep = ({
       null
   const roundedInstantQuote = instantQuote != null ? Math.round(instantQuote) : null
   const distanceFareEnabled = shouldShowDistanceFare(trip.origin, trip.destination)
+  const vehiclePremium = quote?.vehiclePremium ?? 0
 
   const surgeGuess = trip.direction === "From the Airport" ? 1.1 : 1
   const discountGuess = trip.passengerCount >= 4 ? 5 : 0
@@ -1501,6 +1551,12 @@ const PriceQuoteStep = ({
                         Extra passengers • {quote!.extraPassengers} × {formatCurrency(quote!.perPassenger)}
                       </span>
                       <span>{formatCurrency(quote!.extraPassengerTotal)}</span>
+                    </div>
+                  ) : null}
+                  {vehiclePremium > 0 ? (
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Vehicle type premium</span>
+                      <span>{formatCurrency(vehiclePremium)}</span>
                     </div>
                   ) : null}
                   <div className="flex items-center justify-between border-t border-horizon/10 pt-3 text-base font-semibold">
@@ -1793,6 +1849,7 @@ const ReviewStep = ({
     extraPassengerTotal: number
     perPassenger: number
     estimatedGst: number
+    vehiclePremium: number
   } | null
   tipAmount: number
   onTipChange: (value: number) => void
@@ -1810,7 +1867,7 @@ const ReviewStep = ({
   const scheduleDate = new Date(`${schedule.pickupDate}T${schedule.pickupTime}`)
   const scheduleDisplay = Number.isNaN(scheduleDate.getTime()) ? "TBD" : format(scheduleDate, "PPP • p")
   const distanceFareEnabled = shouldShowDistanceFare(trip.origin, trip.destination)
-
+  const groupTotal = quote?.baseRate ?? pricing?.baseRate ?? null
   const baseFare = quote?.baseFare ?? null
   const perPassengerFee = quote?.perPassenger ?? getExtraPassengerFee(trip.origin, trip.destination)
   const extraPassengers = quote?.extraPassengers ?? Math.max(0, trip.passengerCount - 1)
@@ -1819,7 +1876,12 @@ const ReviewStep = ({
     quote?.distanceFare ??
     (groupTotal != null && baseFare != null ? Math.max(0, groupTotal - baseFare - extraPassengerTotal) : 0)
   const renderedDistanceFare = distanceFareEnabled ? distanceFare : 0
-  const groupTotal = quote?.baseRate ?? pricing?.baseRate ?? null
+  const largeVehicleSelected = hasLargeVehicleSelection(trip.vehicleSelections)
+  const fallbackVehiclePremium =
+    largeVehicleSelected && groupTotal != null && baseFare != null ?
+      Math.max(0, roundToCents(groupTotal - baseFare - extraPassengerTotal - distanceFare)) :
+      0
+  const vehiclePremium = quote?.vehiclePremium ?? fallbackVehiclePremium
   const safeTip = Number.isFinite(tipAmount) ? Math.max(0, tipAmount) : 0
   const finalTotal = groupTotal != null ? groupTotal + safeTip : null
   const roundedFinalTotal = finalTotal != null ? Math.round(finalTotal) : null
@@ -1853,25 +1915,25 @@ const ReviewStep = ({
         <SummaryCard title="Scheduling Info">
           <dl className="space-y-2 text-base text-midnight/80">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Pickup</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Pickup</dt>
               <dd className="mt-1 text-base sm:mt-0">{scheduleDisplay}</dd>
             </div>
             {schedule.flightNumber ? (
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Flight</dt>
+                <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Flight</dt>
                 <dd className="mt-1 text-base sm:mt-0">{schedule.flightNumber}</dd>
               </div>
             ) : null}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Special Notes</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Special Notes</dt>
               <dd className="mt-1 text-base text-midnight/70 sm:mt-0">{formattedNotes}</dd>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Total Passengers</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Total Passengers</dt>
               <dd className="mt-1 text-base sm:mt-0">{trip.passengerCount}</dd>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Vehicle Type</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Vehicle Type</dt>
               <dd className="mt-1 text-base sm:mt-0">{vehicleSummary}</dd>
             </div>
           </dl>
@@ -1880,7 +1942,7 @@ const ReviewStep = ({
         <SummaryCard title="Trip Info">
           <dl className="space-y-3 text-base text-midnight/80">
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Pickup</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Pickup</dt>
               <dd className="mt-1">
                 {trip.origin}
                 {trip.originAddress ? (
@@ -1889,7 +1951,7 @@ const ReviewStep = ({
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Drop-off</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Drop-off</dt>
               <dd className="mt-1">
                 {trip.destination}
                 {trip.destinationAddress ? (
@@ -1903,19 +1965,19 @@ const ReviewStep = ({
         <SummaryCard title="Passenger Info">
           <dl className="space-y-2 text-base text-midnight/80">
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Primary Passenger</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Primary Passenger</dt>
               <dd className="mt-1">{passenger.primaryPassenger}</dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Contact Email</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Contact Email</dt>
               <dd className="mt-1">{passenger.email}</dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Contact Phone</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Contact Phone</dt>
               <dd className="mt-1">{passenger.phone}</dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-[0.28em] text-horizon/70">Baggage</dt>
+              <dt className="text-sm font-semibold uppercase tracking-[0.28em] text-horizon/70">Baggage</dt>
               <dd className="mt-1">{passenger.baggage}</dd>
             </div>
           </dl>
@@ -1940,6 +2002,12 @@ const ReviewStep = ({
                     Extra passengers • {extraPassengers} × {formatCurrency(perPassengerFee)}
                   </span>
                   <span>{formatCurrency(extraPassengerTotal)}</span>
+                </div>
+              ) : null}
+              {vehiclePremium > 0 ? (
+                <div className="flex items-center justify-between">
+                  <span>Vehicle type premium</span>
+                  <span>{formatCurrency(vehiclePremium)}</span>
                 </div>
               ) : null}
               <div className="flex items-center justify-between">
@@ -2078,7 +2146,7 @@ const Field = ({
   className?: string
 }) => (
   <div className={clsx("flex flex-col gap-2", className)}>
-    <span className="text-xs font-semibold uppercase tracking-[0.3em] text-horizon/80">{label}</span>
+    <span className="text-lg font-semibold uppercase tracking-[0.3em] text-horizon/80">{label}</span>
     {error ? <div className="field-error-control">{children}</div> : children}
     {helper ? (
       <span className="text-base text-midnight/70">{helper}</span>
