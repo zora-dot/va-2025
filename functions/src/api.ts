@@ -15,6 +15,7 @@ import {
   queueSmsNotification,
 } from './notifications';
 import { createQuote, serializeQuoteResponse, updateQuote, attachContact, confirmQuote, getQuote } from './quotesService';
+import { derivePreferredRateKey } from './utils/ratePreferences';
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -961,6 +962,8 @@ app.post('/fares/quote', async (req, res) => {
       pickupDate,
       pickupTime,
       suppressLog,
+      vehicleSelections,
+      preferredRateKey: preferredRateKeyRaw,
     } = (req.body || {}) as {
       direction?: TripDirection;
       origin?: string;
@@ -983,6 +986,8 @@ app.post('/fares/quote', async (req, res) => {
         phone?: string | null;
       };
       suppressLog?: boolean;
+      vehicleSelections?: unknown;
+      preferredRateKey?: string | null;
     };
 
     const authedReq = req as AuthedReq;
@@ -1011,12 +1016,19 @@ app.post('/fares/quote', async (req, res) => {
       placeId: destinationPlaceId ?? null,
     });
 
+    const sanitizedVehicleSelections = sanitizeVehicleSelections(vehicleSelections);
+    const resolvedPreferredRateKey =
+      (typeof preferredRateKeyRaw === 'string' && preferredRateKeyRaw.trim().length > 0
+        ? preferredRateKeyRaw.trim()
+        : null) ?? derivePreferredRateKey(pax, sanitizedVehicleSelections);
+
     const pricing = await calculatePricing({
       direction,
       origin,
       destination,
       passengerCount: pax,
       preferredVehicle,
+      preferredRateKey: resolvedPreferredRateKey ?? undefined,
       originAddress: originDetails.address,
       destinationAddress: destinationDetails.address,
       originLatLng:
@@ -1121,6 +1133,8 @@ app.post('/price', async (req, res) => {
   }
 });
 
+const QUOTE_COUNTER_DOC = db.collection('meta').doc('quoteCounters');
+
 app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
   try {
     const { trip = {}, quote = {}, schedule = {}, contact = {}, lastStep } = (req.body || {}) as Record<string, unknown>;
@@ -1139,6 +1153,7 @@ app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
       sanitizeOptionalNumber(tripData.passengers) ??
       sanitizeOptionalNumber((tripData as { passengerCount?: unknown }).passengerCount);
     const preferredVehicle = sanitizeStringField(tripData.preferredVehicle);
+    const preferredRateKey = sanitizeStringField(tripData.preferredRateKey);
 
     const quoteData = quote as Record<string, unknown>;
     const amount = sanitizeOptionalNumber(quoteData.amount);
@@ -1182,6 +1197,7 @@ app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
       quote: amount != null ? Math.round(amount) : null,
       quoteBreakdown,
       contact: contactSanitized,
+      preferredRateKey: preferredRateKey ?? null,
       pickupDate: scheduleSanitized.pickupDate,
       pickupTime: scheduleSanitized.pickupTime,
       flightNumber: scheduleSanitized.flightNumber,
@@ -1198,7 +1214,19 @@ app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
         : null,
     };
 
-    const ref = await db.collection('quoteLogs').add(docData);
+    const ref = await db.runTransaction(async (tx) => {
+      const counterSnap = await tx.get(QUOTE_COUNTER_DOC);
+      let nextQuoteNumber = 0;
+      if (counterSnap.exists) {
+        const data = counterSnap.data() as { current?: number };
+        nextQuoteNumber = typeof data.current === 'number' ? data.current + 1 : 0;
+      }
+      tx.set(QUOTE_COUNTER_DOC, { current: nextQuoteNumber }, { merge: true });
+      const quoteRef = db.collection('quoteLogs').doc();
+      tx.set(quoteRef, { ...docData, quoteNumber: nextQuoteNumber });
+      return quoteRef;
+    });
+
     res.status(201).json({ id: ref.id });
   } catch (error) {
     console.error('quoteLogs:create failed', error);
@@ -1242,6 +1270,9 @@ app.patch('/quoteLogs/:logId', optionalAuth, async (req: AuthedReq, res) => {
       }
       if (tripData.preferredVehicle !== undefined) {
         updates.preferredVehicle = sanitizeStringField(tripData.preferredVehicle);
+      }
+      if (tripData.preferredRateKey !== undefined) {
+        updates.preferredRateKey = sanitizeStringField(tripData.preferredRateKey);
       }
       if (tripData.status !== undefined) {
         updates.status = sanitizeStringField(tripData.status);

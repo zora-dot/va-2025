@@ -29,7 +29,6 @@ const baseDirections = getAvailableDirections()
 const extraDirections = ["Ferry Terminal", "Cruise Terminal"] as const
 const directionOptions = [...baseDirections, ...extraDirections] as const
 type DirectionOption = (typeof directionOptions)[number]
-const otherOptionLabel = "Other (please specify)"
 const ABBOTSFORD_ANY_ADDRESS = "Abbotsford (Any Address)"
 const additionalTerminals = [
   "Abbotsford International Airport (YXX)",
@@ -174,7 +173,7 @@ const combineDateAndTime = (date: string, hour: string, minute: string, period: 
 const vehicleOptions = [
   {
     id: "sevenVan",
-    label: "7-Seater Van (up to 5 passengers)",
+    label: "7-Seater Van (up to 6 passengers)",
     helper: "Plenty of room for families and carry-ons.",
   },
   {
@@ -200,8 +199,77 @@ const vehicleLabelMap: Record<VehicleOptionId, string> = Object.fromEntries(
   vehicleOptions.map((option) => [option.id, option.label]),
 ) as Record<VehicleOptionId, string>
 
+type PassengerOption = {
+  id: string
+  passengers: number
+  label: string
+  vehicleId?: VehicleOptionId
+  preferredRateKey?: string | null
+  warning?: string
+}
+
+const passengerOptions: PassengerOption[] = [
+  { id: "p1", passengers: 1, label: "1 Passenger" },
+  { id: "p2", passengers: 2, label: "2 Passengers" },
+  { id: "p3", passengers: 3, label: "3 Passengers" },
+  { id: "p4", passengers: 4, label: "4 Passengers" },
+  { id: "p5", passengers: 5, label: "5 Passengers" },
+  {
+    id: "p6-standard",
+    passengers: 6,
+    label: "6 Passengers (7-Seater Regular Van)",
+    vehicleId: "sevenVan",
+    warning: "Limited luggage room on the 7-seater. Choose a larger van if you need extra space.",
+  },
+  {
+    id: "p6-large",
+    passengers: 6,
+    label: "6 Passengers (8-Seater Larger Van)",
+    vehicleId: "chevyExpress",
+    preferredRateKey: "7v",
+  },
+  {
+    id: "p7-large",
+    passengers: 7,
+    label: "7 Passengers (8-Seater Larger Van)",
+    vehicleId: "chevyExpress",
+    preferredRateKey: "7v",
+  },
+  {
+    id: "p8-11",
+    passengers: 11,
+    label: "8-11 Passengers (12-Seater Mercedes Sprinter)",
+    vehicleId: "mercedesSprinter",
+    preferredRateKey: "8-11",
+  },
+  {
+    id: "p12-14",
+    passengers: 14,
+    label: "12-14 Passengers (15-Seater Freightliner Sprinter)",
+    vehicleId: "freightlinerSprinter",
+    preferredRateKey: "12-14",
+  },
+] as const
+
+const resolvePassengerOption = (
+  passengerCount: number,
+  vehicleId?: VehicleOptionId | null,
+): PassengerOption | null => {
+  if (vehicleId) {
+    const exact = passengerOptions.find(
+      (option) => option.passengers === passengerCount && option.vehicleId === vehicleId,
+    )
+    if (exact) return exact
+  }
+  return (
+    passengerOptions.find(
+      (option) => option.passengers === passengerCount && option.vehicleId == null,
+    ) ?? null
+  )
+}
+
 const vehiclePreferenceMap: Record<VehicleOptionId, "standard" | "van"> = {
-  sevenVan: "van",
+  sevenVan: "standard",
   chevyExpress: "van",
   mercedesSprinter: "van",
   freightlinerSprinter: "van",
@@ -233,10 +301,8 @@ const directionEnum = z.enum(directionOptions as unknown as [DirectionOption, ..
 const tripSchema = z.object({
   direction: directionEnum,
   origin: z.string().min(1, "Select a pick-up address"),
-  originOther: z.string().optional(),
   originAddress: z.string().optional(),
   destination: z.string().min(1, "Select a drop-off address"),
-  destinationOther: z.string().optional(),
   destinationAddress: z.string().optional(),
   passengerCount: z
     .coerce
@@ -276,6 +342,7 @@ type TripData = {
   destinationAddress?: string
   passengerCount: number
   vehicleSelections: VehicleOptionId[]
+  preferredRateKey?: string | null
 }
 
 type ScheduleData = {
@@ -298,7 +365,8 @@ export const BookingWizard = () => {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submissionDetails, setSubmissionDetails] = useState<{ paymentLink?: string | null } | null>(null)
   const [tipAmount, setTipAmount] = useState<number>(0)
-  const [paymentPreference, setPaymentPreference] = useState<"pay_on_arrival" | "pay_now">("pay_on_arrival")
+  const [paymentPreference, setPaymentPreference] = useState<"pay_on_arrival" | "pay_now" | null>(null)
+  const [paymentSelectionError, setPaymentSelectionError] = useState<string | null>(null)
   const [quoteLogId, setQuoteLogId] = useState<string | null>(null)
   const quoteLogIdRef = useRef<string | null>(null)
   const [remotePricing, setRemotePricing] = useState<PricingResult | null>(null)
@@ -463,6 +531,7 @@ export const BookingWizard = () => {
       destination: tripData.destination,
       passengerCount: tripData.passengerCount,
       preferredVehicle: preferred,
+      preferredRateKey: tripData.preferredRateKey ?? null,
     })
   }, [tripData])
 
@@ -473,12 +542,26 @@ export const BookingWizard = () => {
       return null
     }
     const baseRate = pricing.baseRate
-    const rawBaseFare =
-      (pricing.ratesTable && typeof pricing.ratesTable["1"] === "number" ?
-        Math.round(pricing.ratesTable["1"]) :
-        baseRate) ?? baseRate
-    const baseFare = Math.max(0, rawBaseFare)
-    const extraPassengers = Math.max(0, tripData.passengerCount - 1)
+    const resolvedRateKey = tripData.preferredRateKey ?? pricing.vehicleKey ?? null
+    const resolvedRateValue =
+      resolvedRateKey && pricing.ratesTable && typeof pricing.ratesTable[resolvedRateKey] === "number"
+        ? Math.round(pricing.ratesTable[resolvedRateKey]!)
+        : null
+    const fallbackRateValue = (() => {
+      if (!pricing.ratesTable) return null
+      const passengerKey = tripData.passengerCount.toString()
+      if (typeof pricing.ratesTable[passengerKey] === "number") {
+        return Math.round(pricing.ratesTable[passengerKey]!)
+      }
+      if (typeof pricing.ratesTable["1"] === "number") {
+        return Math.round(pricing.ratesTable["1"]!)
+      }
+      return null
+    })()
+    const baseFare = Math.max(0, resolvedRateValue ?? fallbackRateValue ?? baseRate ?? 0)
+    const usesFlatRateSelection = Boolean(tripData.preferredRateKey)
+    const chargeablePassengerCount = usesFlatRateSelection ? 1 : Math.min(6, tripData.passengerCount)
+    const extraPassengers = Math.max(0, chargeablePassengerCount - 1)
     const perPassengerFee = getExtraPassengerFee(tripData.origin, tripData.destination)
     const extraPassengerTotal = extraPassengers * perPassengerFee
     const roundedBaseRate = Math.round(baseRate)
@@ -504,16 +587,15 @@ export const BookingWizard = () => {
     Boolean(value && value.toLowerCase().includes("any address"))
 
   const handleTripSubmit = tripForm.handleSubmit((values: TripForm) => {
-    const originFinal = values.origin === otherOptionLabel ? values.originOther?.trim() : values.origin
-    const destinationFinal =
-      values.destination === otherOptionLabel ? values.destinationOther?.trim() : values.destination
+    const originFinal = values.origin?.trim()
+    const destinationFinal = values.destination?.trim()
 
     if (!originFinal) {
-      tripForm.setError("originOther", { type: "required", message: "Enter origin" })
+      tripForm.setError("origin", { type: "required", message: "Select a pick-up address" })
       return
     }
     if (!destinationFinal) {
-      tripForm.setError("destinationOther", { type: "required", message: "Enter destination" })
+      tripForm.setError("destination", { type: "required", message: "Select a drop-off address" })
       return
     }
 
@@ -532,6 +614,11 @@ export const BookingWizard = () => {
       return
     }
 
+    const passengerOptionMeta = resolvePassengerOption(
+      values.passengerCount,
+      values.vehicleSelections?.[0],
+    )
+
     const payload: TripData = {
       direction: values.direction,
       origin: originFinal,
@@ -540,6 +627,7 @@ export const BookingWizard = () => {
       destinationAddress: destinationAddressFinal,
       passengerCount: values.passengerCount,
       vehicleSelections: values.vehicleSelections,
+      preferredRateKey: passengerOptionMeta?.preferredRateKey ?? null,
     }
 
     setTripData(payload)
@@ -599,6 +687,10 @@ export const BookingWizard = () => {
   const handleConfirm = useCallback(async () => {
     if (submitted || submittingBooking) return
     if (!tripData || !scheduleData || !passengerData) return
+    if (!paymentPreference) {
+      setPaymentSelectionError("Payment method must be selected.")
+      return
+    }
 
     const safeTip = Number.isFinite(tipAmount) ? Math.max(0, tipAmount) : 0
     const baseEstimate = pricing?.baseRate ?? null
@@ -659,6 +751,7 @@ export const BookingWizard = () => {
             includeReturn: false,
             vehicleSelections: tripData.vehicleSelections,
             preferredVehicle,
+            preferredRateKey: tripData.preferredRateKey ?? null,
           },
           schedule: {
             pickupDate: scheduleData.pickupDate,
@@ -803,7 +896,8 @@ export const BookingWizard = () => {
     setSubmitError(null)
     setSubmissionDetails(null)
     setTipAmount(0)
-    setPaymentPreference("pay_on_arrival")
+    setPaymentPreference(null)
+    setPaymentSelectionError(null)
     setQuoteLogId(null)
     quoteLogIdRef.current = null
     setRemotePricing(null)
@@ -833,35 +927,8 @@ export const BookingWizard = () => {
     return list
   }, [])
 
-  const originOptions = useMemo(() => {
-    const list = [...locationOptions]
-    const otherKey = normalizeLocationLabel(otherOptionLabel)
-    if (!list.some((option) => normalizeLocationLabel(option) === otherKey)) {
-      list.push(otherOptionLabel)
-    }
-    const seen = new Set<string>()
-    return list.filter((option) => {
-      const key = normalizeLocationLabel(option)
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }, [locationOptions])
-
-  const destinationOptions = useMemo(() => {
-    const list = [...locationOptions]
-    const otherKey = normalizeLocationLabel(otherOptionLabel)
-    if (!list.some((option) => normalizeLocationLabel(option) === otherKey)) {
-      list.push(otherOptionLabel)
-    }
-    const seen = new Set<string>()
-    return list.filter((option) => {
-      const key = normalizeLocationLabel(option)
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }, [locationOptions])
+  const originOptions = useMemo(() => [...locationOptions], [locationOptions])
+  const destinationOptions = useMemo(() => [...locationOptions], [locationOptions])
 
   useEffect(() => {
     if (step !== 1 || !tripData || quoteLoading) return
@@ -879,6 +946,7 @@ export const BookingWizard = () => {
         vehicleSelections: tripData.vehicleSelections,
         preferredVehicle:
           tripData.vehicleSelections?.[0] ?? determineVehicleOption(tripData.passengerCount),
+        preferredRateKey: tripData.preferredRateKey ?? null,
         status: baseQuote != null ? "success" : "no_price",
       },
       quote:
@@ -987,7 +1055,8 @@ export const BookingWizard = () => {
           tipAmount={tipAmount}
           onTipChange={setTipAmount}
           paymentPreference={paymentPreference}
-          onPaymentPreferenceChange={setPaymentPreference}
+          onPaymentPreferenceChange={handlePaymentPreferenceChange}
+          paymentSelectionError={paymentSelectionError}
           paymentLink={submissionDetails?.paymentLink ?? null}
         />
       ) : null}
@@ -1004,44 +1073,47 @@ const StepHeader = ({
   maxStep: StepKey
   onSelect: (step: StepKey) => void
 }) => {
-  const steps: Array<{ label: string }> = [
-    { label: "Trip" },
-    { label: "Price" },
-    { label: "Schedule" },
-    { label: "Passengers" },
-    { label: "Review" },
+  const steps: Array<{ label: string; short: string }> = [
+    { label: "Trip", short: "1" },
+    { label: "Price", short: "2" },
+    { label: "Schedule", short: "3" },
+    { label: "Passengers", short: "4" },
+    { label: "Review", short: "5" },
   ]
   return (
-    <GlassPanel className="p-4">
-      <div className="flex items-center gap-4">
+    <GlassPanel className="p-3 sm:p-4">
+      <div className="grid grid-cols-5 gap-2 sm:gap-3">
         {steps.map((stepItem, index) => {
           const stepIndex = index as StepKey
           const enabled = stepIndex <= maxStep
           const isActive = stepIndex === current
           return (
-            <div key={stepItem.label} className="flex flex-1 items-center gap-4 min-w-0">
-              <button
-                type="button"
-                onClick={() => (enabled ? onSelect(stepIndex) : undefined)}
-                disabled={!enabled}
-                className={clsx(
-                  "flex h-14 w-full items-center justify-center rounded-full px-6 text-base font-bold uppercase tracking-[0.2em] transition",
-                  isActive
-                    ? "bg-horizon text-white shadow-glow"
-                    : enabled
-                      ? "border border-horizon/30 bg-white/85 text-horizon hover:border-horizon/50"
-                      : "border border-horizon/20 bg-white/65 text-horizon/40",
-                )}
-              >
-                <span>{stepItem.label}</span>
-              </button>
-              {index < steps.length - 1 ? (
-                <span className="hidden h-px w-16 rounded bg-horizon/30 md:block" aria-hidden />
-              ) : null}
-            </div>
+            <button
+              key={stepItem.label}
+              type="button"
+              onClick={() => (enabled ? onSelect(stepIndex) : undefined)}
+              disabled={!enabled}
+              aria-label={`Step ${stepItem.short}: ${stepItem.label}`}
+              className={clsx(
+                "flex h-11 w-full items-center justify-center rounded-full text-sm font-semibold uppercase tracking-[0.24em] transition sm:h-12 sm:text-base sm:tracking-[0.28em]",
+                isActive
+                  ? "bg-horizon text-white shadow-glow"
+                  : enabled
+                    ? "border border-horizon/30 bg-white/85 text-horizon hover:border-horizon/50"
+                    : "border border-horizon/20 bg-white/65 text-horizon/40",
+              )}
+            >
+              <span>{stepItem.short}</span>
+              <span className="sr-only sm:not-sr-only sm:ml-2 sm:text-xs sm:font-normal sm:tracking-[0.35em]">
+                {stepItem.label}
+              </span>
+            </button>
           )
         })}
       </div>
+      <p className="mt-2 text-center text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-horizon/70 sm:hidden">
+        {steps[current].label}
+      </p>
     </GlassPanel>
   )
 }
@@ -1069,6 +1141,11 @@ const TripStep = ({
 
   const [pickupAcknowledged, setPickupAcknowledged] = useState(Boolean(selectedOrigin))
   const [dropoffAcknowledged, setDropoffAcknowledged] = useState(Boolean(selectedDestination))
+
+  const passengerCountRegister = register("passengerCount", {
+    valueAsNumber: true,
+    max: { value: PASSENGER_MAX, message: PASSENGER_LIMIT_MESSAGE },
+  })
 
   const originRegister = register("origin", {
     onChange: () => setPickupAcknowledged(true),
@@ -1118,9 +1195,22 @@ const TripStep = ({
 
   useEffect(() => {
     const resolvedPassengerCount = Math.max(1, Number(passengerCount) || 1)
-    const autoVehicle = determineVehicleOption(resolvedPassengerCount)
-    if (selectedVehicles[0] !== autoVehicle || selectedVehicles.length > 1) {
-      setValue("vehicleSelections", [autoVehicle], { shouldValidate: true })
+    const currentVehicle = selectedVehicles[0]
+    const matchedOption = resolvePassengerOption(resolvedPassengerCount, currentVehicle)
+    if (matchedOption) {
+      if (currentVehicle && selectedVehicles.length === 1) {
+        return
+      }
+      setValue("vehicleSelections", [matchedOption.vehicleId ?? determineVehicleOption(resolvedPassengerCount)], {
+        shouldValidate: true,
+      })
+      return
+    }
+    const fallbackOption = resolvePassengerOption(resolvedPassengerCount, undefined)
+    const preferredVehicle =
+      fallbackOption?.vehicleId ?? determineVehicleOption(resolvedPassengerCount)
+    if (currentVehicle !== preferredVehicle || selectedVehicles.length > 1) {
+      setValue("vehicleSelections", [preferredVehicle], { shouldValidate: true })
     }
   }, [passengerCount, selectedVehicles, setValue])
 
@@ -1141,11 +1231,34 @@ const TripStep = ({
   const showDropoff = pickupAcknowledged && pickupReady
   const showPassengerCount = dropoffAcknowledged && dropoffReady
 
-  const autoVehicle = selectedVehicles[0] ?? determineVehicleOption(Math.max(1, Number(passengerCount) || 1))
+  const autoPassengerCount = Math.max(1, Number(passengerCount) || 1)
+  const autoVehicle = selectedVehicles[0] ?? determineVehicleOption(autoPassengerCount)
   const autoVehicleLabel = vehicleLabelMap[autoVehicle] ?? "Auto-assigned vehicle"
+  const selectedPassengerOption = useMemo(
+    () => resolvePassengerOption(autoPassengerCount, autoVehicle),
+    [autoPassengerCount, autoVehicle],
+  )
+  const selectedPassengerOptionId = selectedPassengerOption?.id ?? ""
+
+  const handlePassengerOptionSelect = useCallback(
+    (option: PassengerOption) => {
+      const vehicle = option.vehicleId ?? determineVehicleOption(option.passengers)
+      setValue("passengerCount", option.passengers, { shouldValidate: true, shouldDirty: true })
+      setValue("vehicleSelections", [vehicle], { shouldValidate: true, shouldDirty: true })
+    },
+    [setValue],
+  )
+
+  const handlePaymentPreferenceChange = useCallback(
+    (value: "pay_on_arrival" | "pay_now") => {
+      setPaymentSelectionError(null)
+      setPaymentPreference(value)
+    },
+    [],
+  )
 
   return (
-    <GlassPanel className="p-6">
+    <GlassPanel className="p-5 sm:p-6">
       <h2 className="font-heading text-xl uppercase tracking-[0.3em] text-horizon">Trip Details</h2>
       <form className="mt-6 grid gap-4" onSubmit={onSubmit}>
         <Field
@@ -1156,7 +1269,7 @@ const TripStep = ({
           <select
             {...originRegister}
             onBlur={() => setPickupAcknowledged(true)}
-            className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+            className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           >
             <option value="">Select pick-up address</option>
             {originGroups.map((group) => (
@@ -1169,14 +1282,6 @@ const TripStep = ({
               </optgroup>
             ))}
           </select>
-          {selectedOrigin === otherOptionLabel ? (
-            <input
-              type="text"
-              {...form.register("originOther")}
-              placeholder="Enter full pick-up address"
-              className="mt-3 h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
-            />
-          ) : null}
         </Field>
 
         {shouldCollectAddress(selectedOrigin) ? (
@@ -1209,34 +1314,23 @@ const TripStep = ({
               error={formState.errors.destination?.message}
               helper="Add the exact drop-off details, including unit number."
             >
-          <select
-            {...destinationRegister}
-            onBlur={() => setDropoffAcknowledged(true)}
-            className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
-          >
-            <option value="">Select drop-off address</option>
-            {destinationGroups.map((group) => (
-              <optgroup key={group.label} label={group.label}>
-                {group.options.map((destination) => (
-                  <option key={destination} value={destination}>
-                    {destination}
-                  </option>
+              <select
+                {...destinationRegister}
+                onBlur={() => setDropoffAcknowledged(true)}
+                className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+              >
+                <option value="">Select drop-off address</option>
+                {destinationGroups.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.options.map((destination) => (
+                      <option key={destination} value={destination}>
+                        {destination}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
-              </optgroup>
-            ))}
-          </select>
+              </select>
             </Field>
-
-            {selectedDestination === otherOptionLabel ? (
-              <Field label="Custom Drop-off">
-                <input
-                  type="text"
-                  {...form.register("destinationOther")}
-                  placeholder="Enter full drop-off address"
-                  className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
-                />
-              </Field>
-            ) : null}
 
             {shouldCollectAddress(selectedDestination) ? (
               <Field
@@ -1264,22 +1358,38 @@ const TripStep = ({
         ) : null}
 
         {showPassengerCount ? (
-              <Field label="Passenger Count" error={formState.errors.passengerCount?.message}>
-                <input
-                  type="number"
-                  min={1}
-                  max={PASSENGER_MAX}
-              {...register("passengerCount", {
-                valueAsNumber: true,
-                max: { value: PASSENGER_MAX, message: PASSENGER_LIMIT_MESSAGE },
-              })}
-                  className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
-                  onWheel={(event) => {
-                    event.preventDefault()
-                    event.currentTarget.blur()
-                  }}
-                />
-              </Field>
+          <Field label="Passenger Count" error={formState.errors.passengerCount?.message}>
+            <>
+              <input type="hidden" {...passengerCountRegister} />
+              <p className="text-sm text-midnight/70">
+                If you are booking for more than 14 passengers, please call or email us instead for a group quote.
+              </p>
+              <select
+                className="mt-3 h-12 w-full rounded-2xl border border-horizon/30 bg-white/85 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+                value={selectedPassengerOptionId || ""}
+                onChange={(event) => {
+                  const option = passengerOptions.find((candidate) => candidate.id === event.target.value)
+                  if (option) {
+                    handlePassengerOptionSelect(option)
+                  }
+                }}
+              >
+                <option value="" disabled hidden>
+                  Select passengers
+                </option>
+                {passengerOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {selectedPassengerOption?.warning ? (
+                <p className="mt-2 text-xs text-amber-700">
+                  {selectedPassengerOption.warning}
+                </p>
+              ) : null}
+            </>
+          </Field>
         ) : null}
 
         {showPassengerCount ? (
@@ -1294,15 +1404,15 @@ const TripStep = ({
                   <div
                     key={option.id}
                     className={clsx(
-                      "flex h-full flex-col gap-4 rounded-3xl px-5 py-5 transition",
+                      "flex h-full flex-col gap-4 rounded-3xl px-4 py-4 transition sm:px-5 sm:py-5",
                       isSelected
                         ? "border-[3px] border-emerald-400 bg-emerald-50/90 text-horizon shadow-glow"
                         : "border border-horizon/30 bg-white/85 text-midnight/70",
                     )}
                     aria-pressed={isSelected}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-2">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="flex-1 space-y-2 text-left">
                         {(() => {
                           const [title, restRaw] = option.label.split("(")
                           const rest = restRaw ? restRaw.replace(/\)+$/, "").trim() : null
@@ -1321,18 +1431,15 @@ const TripStep = ({
                         })()}
                         <p className="text-sm text-midnight/70">{option.helper}</p>
                       </div>
-                      <div className="flex flex-none items-start justify-end">
-                        <span
-                          className={clsx(
-                            "inline-flex w-40 justify-center rounded-full px-4 py-1 text-[12px] font-semibold uppercase tracking-[0.2em] whitespace-nowrap",
-                            isSelected ?
-                              "border border-emerald-500 bg-white text-emerald-600 shadow-sm" :
-                              "border border-transparent text-transparent opacity-0",
-                          )}
-                        >
-                          Auto-selected
-                        </span>
-                      </div>
+                      {isSelected ? (
+                        <div className="flex flex-none items-start justify-end">
+                          <span
+                            className="inline-flex min-w-[7rem] justify-center rounded-full border border-emerald-500 bg-white px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-emerald-600 shadow-sm sm:min-w-[8rem] sm:px-4 sm:text-[12px] sm:tracking-[0.2em]"
+                          >
+                            Auto-selected
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )
@@ -1341,7 +1448,7 @@ const TripStep = ({
           </Field>
         ) : null}
 
-        <div className="mt-2 flex flex-wrap gap-3">
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
           <button
             type="button"
             onClick={() => {
@@ -1357,7 +1464,7 @@ const TripStep = ({
               setPickupAcknowledged(false)
               setDropoffAcknowledged(false)
             }}
-            className="flex-1 rounded-full border border-horizon/30 bg-white/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:bg-white/90"
+            className="flex-1 rounded-full border border-horizon/30 bg-white/70 px-4 py-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-horizon transition hover:bg-white/90 sm:px-6 sm:text-xs sm:tracking-[0.32em]"
           >
             Reset Trip Details
           </button>
@@ -1370,7 +1477,7 @@ const TripStep = ({
               !passengerCount ||
               passengerLimitExceeded
             }
-            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-8 py-4 text-base font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 disabled:cursor-not-allowed disabled:border-horizon/30 disabled:bg-horizon/40"
+            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 disabled:cursor-not-allowed disabled:border-horizon/30 disabled:bg-horizon/40 sm:px-8 sm:py-4 sm:text-base sm:tracking-[0.32em]"
           >
             Continue to Price Quote
           </button>
@@ -1435,7 +1542,7 @@ const PriceQuoteStep = ({
       quote?.baseRate ?? pricing?.baseRate ?? null :
       null
   const roundedInstantQuote = instantQuote != null ? Math.round(instantQuote) : null
-  const distanceFareEnabled = shouldShowDistanceFare(trip.origin, trip.destination)
+  const distanceFareEnabled = shouldShowDistanceFare(trip.origin, trip.destination) && !trip.preferredRateKey
   const vehiclePremium = quote?.vehiclePremium ?? 0
 
   const surgeGuess = trip.direction === "From the Airport" ? 1.1 : 1
@@ -1485,19 +1592,7 @@ const PriceQuoteStep = ({
   const showDetails = animationComplete
 
   return (
-    <GlassPanel className="p-8 space-y-8">
-      <div className="flex flex-wrap items-center gap-3 text-horizon pt-1 mb-4">
-        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em]">
-          {trip.origin}
-        </span>
-        <span className="text-sm font-semibold">→</span>
-        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em]">
-          {trip.destination}
-        </span>
-        <span className="rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.34em]">
-          {passengerLabel}
-        </span>
-      </div>
+    <GlassPanel className="space-y-6 p-5 sm:space-y-8 sm:p-8">
 
       <div className="flex justify-center py-4">
         <DispatchAlchemist
@@ -1567,7 +1662,7 @@ const PriceQuoteStep = ({
                     <button
                       type="button"
                       onClick={onContinue}
-                      className="mt-6 w-full rounded-full bg-horizon px-8 py-4 text-base font-semibold uppercase tracking-[0.3em] text-white transition hover:bg-horizon/90"
+                      className="mt-6 w-full rounded-full bg-horizon px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-horizon/90 sm:px-8 sm:py-4 sm:text-base sm:tracking-[0.3em]"
                     >
                       Continue to Pickup Schedule
                     </button>
@@ -1621,7 +1716,7 @@ const PriceQuoteStep = ({
         <button
           type="button"
           onClick={onEditTrip}
-          className="flex-1 rounded-full border border-horizon/40 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-horizon transition hover:bg-white/90 md:flex-none md:px-10"
+          className="flex-1 rounded-full border border-horizon/40 bg-white px-4 py-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-horizon transition hover:bg-white/90 sm:px-6 sm:text-xs sm:tracking-[0.3em] md:flex-none md:px-10"
         >
           Edit details
         </button>
@@ -1660,7 +1755,7 @@ const ScheduleStep = ({
   }, [pickupPeriod, setValue])
 
   return (
-    <GlassPanel className="p-6">
+    <GlassPanel className="p-5 sm:p-6">
       <h2 className="font-heading text-xl uppercase tracking-[0.3em] text-horizon">
         Pickup Schedule
       </h2>
@@ -1670,14 +1765,14 @@ const ScheduleStep = ({
             type="date"
             {...register("pickupDate")}
             min={minSelectableDate}
-            className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+            className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           />
         </Field>
         <Field label="Pickup Time" error={formState.errors.pickupHour?.message}>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto rounded-2xl bg-white/60 px-3 py-2 shadow-inner sm:gap-3 sm:bg-transparent sm:px-0 sm:py-0 sm:shadow-none">
             <select
               {...register("pickupHour")}
-              className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-3 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+              className="h-11 min-w-[4.25rem] flex-1 rounded-2xl border border-horizon/30 bg-white/90 px-3 text-base text-midnight text-center focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30 sm:h-12"
             >
               {hourOptions.map((option) => (
                 <option key={option} value={option}>
@@ -1685,10 +1780,10 @@ const ScheduleStep = ({
                 </option>
               ))}
             </select>
-            <span className="text-lg text-horizon/60">:</span>
+            <span className="text-lg font-semibold text-horizon/60">:</span>
             <select
               {...register("pickupMinute")}
-              className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-3 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+              className="h-11 min-w-[4.25rem] flex-1 rounded-2xl border border-horizon/30 bg-white/90 px-3 text-base text-midnight text-center focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30 sm:h-12"
             >
               {minuteOptions.map((option) => (
                 <option key={option} value={option}>
@@ -1696,7 +1791,7 @@ const ScheduleStep = ({
                 </option>
               ))}
             </select>
-            <div className="inline-flex rounded-full border border-horizon/30 bg-white/80">
+            <div className="flex flex-none rounded-full border border-horizon/30 bg-white/80">
               <button
                 type="button"
                 onClick={() => setValue("pickupPeriod", "AM")}
@@ -1728,7 +1823,7 @@ const ScheduleStep = ({
             type="text"
             {...register("flightNumber")}
             placeholder="AC 123"
-            className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+            className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           />
         </Field>
         <Field label="Special Notes" error={formState.errors.notes?.message} className="sm:col-span-2">
@@ -1739,17 +1834,17 @@ const ScheduleStep = ({
             className="w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 py-3 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           />
         </Field>
-        <div className="sm:col-span-2 flex gap-3">
+        <div className="flex flex-col gap-2 sm:col-span-2 sm:flex-row sm:gap-3">
           <button
             type="button"
             onClick={() => form.reset(buildScheduleDefaults(SOFT_NOTICE_HOURS))}
-            className="flex-1 rounded-full border border-horizon/20 bg-white/70 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:bg-white/90"
+            className="flex-1 rounded-full border border-horizon/20 bg-white/70 px-4 py-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-horizon transition hover:bg-white/90 sm:px-6 sm:text-xs sm:tracking-[0.32em]"
           >
             Reset
           </button>
           <button
             type="submit"
-            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-8 py-4 text-base font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90"
+            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 sm:px-8 sm:py-4 sm:text-base sm:tracking-[0.32em]"
           >
             Continue to Passengers
           </button>
@@ -1770,7 +1865,7 @@ const PassengerStep = ({
   const { register, formState } = form
 
   return (
-    <GlassPanel className="p-6">
+    <GlassPanel className="p-5 sm:p-6">
       <h2 className="font-heading text-xl uppercase tracking-[0.3em] text-horizon">
         Passenger Details
       </h2>
@@ -1779,37 +1874,37 @@ const PassengerStep = ({
           <input
             type="text"
             {...register("primaryPassenger")}
-            className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+            className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           />
         </Field>
         <Field label="Email" error={formState.errors.email?.message}>
           <input
             type="email"
             {...register("email")}
-            className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+            className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           />
         </Field>
         <Field label="Phone" error={formState.errors.phone?.message}>
           <input
             type="tel"
             {...register("phone")}
-            className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+            className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           />
         </Field>
         <Field label="Baggage Profile">
           <select
             {...register("baggage")}
-            className="h-12 rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+            className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           >
             <option value="Normal">Normal</option>
             <option value="Oversized">Oversized</option>
             <option value="Minimal">Minimal</option>
           </select>
         </Field>
-        <div className="sm:col-span-2 flex gap-3">
+        <div className="sm:col-span-2 flex">
           <button
             type="submit"
-            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-8 py-4 text-base font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90"
+            className="flex-1 rounded-full border border-horizon/50 bg-horizon px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 sm:px-8 sm:py-4 sm:text-base sm:tracking-[0.32em]"
           >
             Continue to Review
           </button>
@@ -1829,6 +1924,7 @@ const ReviewStep = ({
   onTipChange,
   paymentPreference,
   onPaymentPreferenceChange,
+  paymentSelectionError,
   onConfirm,
   onBack,
   onReset,
@@ -1853,8 +1949,9 @@ const ReviewStep = ({
   } | null
   tipAmount: number
   onTipChange: (value: number) => void
-  paymentPreference: "pay_on_arrival" | "pay_now"
+  paymentPreference: "pay_on_arrival" | "pay_now" | null
   onPaymentPreferenceChange: (value: "pay_on_arrival" | "pay_now") => void
+  paymentSelectionError: string | null
   onConfirm: () => void
   onBack: () => void
   onReset: () => void
@@ -1909,7 +2006,7 @@ const ReviewStep = ({
       "TBD"
 
   return (
-    <GlassPanel className="p-6">
+    <GlassPanel className="p-5 sm:p-6">
       <h2 className="font-heading text-xl uppercase tracking-[0.3em] text-horizon">Review</h2>
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <SummaryCard title="Scheduling Info">
@@ -2073,21 +2170,26 @@ const ReviewStep = ({
               Tips are optional and can be adjusted at pickup. Choosing pay online now will generate a secure Square
               checkout link.
             </p>
+            {paymentSelectionError ? (
+              <p className="text-xs font-semibold text-ember">
+                {paymentSelectionError}
+              </p>
+            ) : null}
           </div>
         </SummaryCard>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
         <button
           onClick={onBack}
-          className="flex-1 rounded-full border border-horizon/30 bg-white/70 px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:bg-white/90"
+          className="flex-1 rounded-full border border-horizon/30 bg-white/70 px-4 py-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-horizon transition hover:bg-white/90 sm:px-6 sm:text-xs sm:tracking-[0.32em]"
         >
           Back
         </button>
         <button
           type="button"
           onClick={onReset}
-          className="flex-1 rounded-full border border-glacier/40 bg-white/60 px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-glacier transition hover:bg-white/90"
+          className="flex-1 rounded-full border border-glacier/40 bg-white/60 px-4 py-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-glacier transition hover:bg-white/90 sm:px-6 sm:text-xs sm:tracking-[0.32em]"
         >
           Start Over
         </button>
@@ -2095,8 +2197,12 @@ const ReviewStep = ({
           onClick={() => {
             void onConfirm()
           }}
-          disabled={submitted || submitting || (payNowDisabled && paymentPreference === "pay_now")}
-          className="flex-1 rounded-full border border-horizon/50 bg-horizon px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 disabled:cursor-not-allowed disabled:border-horizon/30 disabled:bg-horizon/40"
+          disabled={
+            submitted ||
+            submitting ||
+            (payNowDisabled && paymentPreference === "pay_now")
+          }
+          className="flex-1 rounded-full border border-horizon/50 bg-horizon px-4 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:border-horizon/60 hover:bg-horizon/90 disabled:cursor-not-allowed disabled:border-horizon/30 disabled:bg-horizon/40 sm:px-6 sm:text-xs sm:tracking-[0.32em]"
         >
           {confirmLabel}
         </button>
@@ -2145,11 +2251,13 @@ const Field = ({
   children: ReactNode
   className?: string
 }) => (
-  <div className={clsx("flex flex-col gap-2", className)}>
-    <span className="text-lg font-semibold uppercase tracking-[0.3em] text-horizon/80">{label}</span>
+  <div className={clsx("flex flex-col gap-2 sm:gap-2.5", className)}>
+    <span className="text-sm font-semibold uppercase tracking-[0.2em] text-horizon/80 sm:text-lg sm:tracking-[0.3em]">
+      {label}
+    </span>
     {error ? <div className="field-error-control">{children}</div> : children}
     {helper ? (
-      <span className="text-base text-midnight/70">{helper}</span>
+      <span className="text-sm text-midnight/70 sm:text-base">{helper}</span>
     ) : null}
     {error ? <span className="field-error-text text-xs">{error}</span> : null}
   </div>

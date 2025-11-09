@@ -74,6 +74,7 @@ export default function DispatchAlchemist({
   const index = Math.min(messages.length - 1, Math.floor(elapsed / stepMs));
   const progress = Math.round((elapsed / durationMs) * 100);
   const activeAnim = index % 2 === 0 ? carsAnimation : driverAnimation;
+  const remainingSeconds = Math.max(0, Math.ceil((durationMs - elapsed) / 1000));
 
   useEffect(() => {
     const start = performance.now();
@@ -160,8 +161,8 @@ export default function DispatchAlchemist({
         }}
       />
 
-      <div className="relative flex items-center gap-6 pb-6">
-        <motion.svg aria-hidden viewBox="0 0 200 120" className="w-40 h-24 shrink-0">
+      <div className="flex flex-col gap-3 pb-5">
+        <motion.svg aria-hidden viewBox="0 0 200 120" className="mx-auto h-20 w-9/12 max-w-sm shrink-0">
           <motion.path
             d="M10,100 C40,20 160,20 190,100"
             fill="none"
@@ -176,8 +177,8 @@ export default function DispatchAlchemist({
           <circle cx="190" cy="100" r="3" fill="#c026d3" />
         </motion.svg>
 
-        <div className="w-28 h-28 shrink-0">
-          <Lottie animationData={activeAnim} loop autoplay />
+        <div className="mx-auto w-full max-w-md rounded-3xl bg-white/80 p-3 shadow-inner" style={{ minHeight: 160 }}>
+          <Lottie animationData={activeAnim} loop autoplay style={{ width: "100%", height: "140px" }} />
         </div>
 
         <div className="flex-1">
@@ -190,11 +191,21 @@ export default function DispatchAlchemist({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className="text-lg font-medium text-slate-800"
+              className="text-center text-base font-semibold text-slate-800 sm:text-left sm:text-lg"
+              style={{ filter: "none" }}
             >
               {messages[index]}
             </motion.div>
           </AnimatePresence>
+
+          {!revealed ? (
+            <p
+              aria-live="polite"
+              className="mt-1 text-center text-sm font-medium text-slate-500 sm:text-left"
+            >
+              {remainingSeconds > 0 ? `${remainingSeconds}s remaining` : "Finishing up"}
+            </p>
+          ) : null}
 
           <div className="mt-3 h-2 w-full bg-slate-100 rounded-full overflow-hidden">
             <motion.div
@@ -206,9 +217,6 @@ export default function DispatchAlchemist({
             />
           </div>
 
-          <div className="mt-2 text-xs text-slate-500">
-            {Math.max(0, Math.ceil((durationMs - elapsed) / 1000))}s remaining
-          </div>
         </div>
       </div>
 

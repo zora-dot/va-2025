@@ -19,6 +19,7 @@ export interface PricingRequest {
   destination: string
   passengerCount: number
   preferredVehicle?: "standard" | "van"
+  preferredRateKey?: string | null
 }
 
 export interface PricingResult {
@@ -79,7 +80,7 @@ const passengerKeyMatcher = (passengerCount: number): string[] => {
   if (passengerCount >= 12) return ["12-14", "14"]
   if (passengerCount >= 8) return ["8-11", "11"]
   if (passengerCount >= 7) return ["7v", "7"]
-  if (passengerCount >= 6) return ["6v", "6"]
+  if (passengerCount === 6) return ["6", "6v"]
   if (passengerCount <= 0) return []
   return [passengerCount.toString()]
 }
@@ -88,7 +89,11 @@ const pickRateKey = (
   rates: PricingVehicleNumericRates,
   passengerCount: number,
   preferred?: "standard" | "van",
+  preferredRateKey?: string | null,
 ): string | null => {
+  if (preferredRateKey && rates[preferredRateKey] != null) {
+    return preferredRateKey
+  }
   const candidateKeys = passengerKeyMatcher(passengerCount)
 
   if (preferred === "van") {
@@ -134,6 +139,7 @@ export const calculatePricing = ({
   destination,
   passengerCount,
   preferredVehicle,
+  preferredRateKey,
 }: PricingRequest): PricingResult => {
   let lookupDirection: TripDirection = direction
   let lookupOrigin = origin
@@ -171,10 +177,11 @@ export const calculatePricing = ({
     }
   }
 
-  const vehicleKey = pickRateKey(numericRates, passengerCount, preferredVehicle)
+  const vehicleKey = pickRateKey(numericRates, passengerCount, preferredVehicle, preferredRateKey)
   const rawBaseRate = vehicleKey ? numericRates[vehicleKey] ?? null : null
   const baseRate = rawBaseRate != null ? Math.round(rawBaseRate) : null
-  const shouldApplyDistanceRule = Boolean(distanceRule) && passengerCount <= 5
+  const shouldApplyDistanceRule =
+    Boolean(distanceRule) && passengerCount <= 6 && !preferredRateKey
 
   if (!shouldApplyDistanceRule) {
     return {

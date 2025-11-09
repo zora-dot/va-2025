@@ -13,6 +13,7 @@ import { sendBookingConfirmation } from "./studioConfirm";
 import { getOptionalUser } from "./_auth";
 import { syncCustomerBooking } from "./utils/customerBookings";
 import { parseDateTimeInTimeZone, SERVICE_TIME_ZONE } from "./utils/timezone";
+import { derivePreferredRateKey } from "./utils/ratePreferences";
 
 const db = admin.firestore();
 
@@ -60,6 +61,7 @@ interface TripPayload {
   returnDestinationPlaceId?: string | null;
   vehicleSelections: string[];
   preferredVehicle?: "standard" | "van";
+  preferredRateKey?: string | null;
 }
 
 interface SchedulePayload {
@@ -189,6 +191,10 @@ export const createBooking = onRequest({
 
     const canonicalTrip: TripPayload = {
       ...trip,
+      preferredRateKey:
+        typeof trip.preferredRateKey === "string" && trip.preferredRateKey.trim().length > 0
+          ? trip.preferredRateKey.trim()
+          : null,
       originAddress: originDetails.address,
       originLat: originDetails.lat,
       originLng: originDetails.lng,
@@ -331,12 +337,17 @@ export const createBooking = onRequest({
       });
     }
 
+    const derivedPreferredRateKey =
+      canonicalTrip.preferredRateKey ??
+      derivePreferredRateKey(canonicalTrip.passengerCount, canonicalTrip.vehicleSelections)
+
     const pricing = await calculatePricing({
       direction: canonicalTrip.direction,
       origin: canonicalTrip.origin,
       destination: canonicalTrip.destination,
       passengerCount: canonicalTrip.passengerCount,
       preferredVehicle: canonicalTrip.preferredVehicle,
+      preferredRateKey: derivedPreferredRateKey,
       originAddress: canonicalTrip.originAddress,
       destinationAddress: canonicalTrip.destinationAddress,
       originLatLng:

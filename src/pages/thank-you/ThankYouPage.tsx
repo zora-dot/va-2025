@@ -36,10 +36,15 @@ export const ThankYouPage = () => {
 
   return (
     <div className="flex flex-col gap-10 pb-16">
-      <GlassPanel className="relative overflow-hidden p-8">
+      <GlassPanel className="relative overflow-hidden p-8 space-y-6">
         <div className="absolute -right-36 -top-20 h-72 w-72 rounded-full bg-[#6fbfff22] blur-3xl" aria-hidden />
         <div className="absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-[#9cc6ff26] blur-3xl" aria-hidden />
-        <div className="relative flex flex-col gap-6">
+        {bookingNumber != null ? (
+          <div className="relative flex items-center rounded-2xl border border-white/50 bg-white/70 px-4 py-3 text-horizon shadow-inner">
+            <p className="text-base font-bold text-horizon">Form # {bookingNumber}</p>
+          </div>
+        ) : null}
+        <div className="relative flex flex-col gap-6 pt-2">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
             <div className="flex flex-1 flex-col gap-4">
               <span className="inline-flex items-center gap-2 self-start rounded-full border border-white/60 bg-white/80 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-horizon shadow-sm">

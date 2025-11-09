@@ -11,7 +11,7 @@ const GlassPanelComponent = ({ className, children }: GlassPanelProps) => {
     <div
       className={twMerge(
         clsx(
-          "group rounded-glass border border-white/35 text-midnight",
+          "group relative overflow-hidden rounded-glass border border-white/35 text-midnight",
           "bg-[color:var(--va-color-surface)]/92 backdrop-blur-2xl shadow-[0_24px_55px_-24px_rgba(31,90,168,0.35)] transition-all duration-300 ease-out",
           "hover:-translate-y-1 hover:shadow-[0_26px_55px_-26px_rgba(44,177,166,0.35)] hover:border-horizon/30",
           "focus-within:-translate-y-1 focus-within:shadow-[0_28px_60px_-26px_rgba(44,177,166,0.35)]",

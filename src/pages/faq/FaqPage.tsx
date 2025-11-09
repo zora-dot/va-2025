@@ -11,19 +11,19 @@ const faqColors = [
 export const FaqPage = () => {
   return (
     <div className="flex flex-col gap-6 pb-16">
-      <GlassPanel className="grid gap-6 p-7 lg:grid-cols-[1fr_280px]">
+      <GlassPanel className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[1fr_280px]">
         <div>
-          <p className="font-heading text-base uppercase tracking-[0.35em] text-horizon/70">
+          <p className="font-heading text-sm uppercase tracking-[0.28em] text-horizon/70 sm:text-base sm:tracking-[0.35em]">
             Valley Airporter FAQ
           </p>
-          <h1 className="mt-4 font-heading text-3xl uppercase tracking-[0.28em] text-horizon">
+          <h1 className="mt-3 font-heading text-2xl uppercase tracking-[0.24em] text-horizon sm:mt-4 sm:text-3xl sm:tracking-[0.28em]">
             Your Questions, Answered
           </h1>
         </div>
         <ResponsiveImage
           src="https://st.depositphotos.com/4428871/53719/v/450/depositphotos_537196004-stock-illustration-faq-frequently-asked-questions-acronym.jpg"
           alt="Traveler thinking through a question"
-          className="h-[260px] w-full rounded-3xl object-cover shadow-lg"
+          className="mx-auto h-44 w-full max-w-md rounded-3xl object-contain shadow-lg sm:mx-0 sm:h-60 sm:max-w-none sm:object-cover lg:h-[260px]"
           sources={[
             {
               srcSet: "https://st.depositphotos.com/4428871/53719/v/450/depositphotos_537196004-stock-illustration-faq-frequently-asked-questions-acronym.jpg",

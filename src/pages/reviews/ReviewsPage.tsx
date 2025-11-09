@@ -24,7 +24,7 @@ export const ReviewsPage = () => {
           </h1>
           <Star className="mt-2 h-10 w-10 text-horizon" aria-hidden />
           <p className="mt-4 max-w-3xl text-base text-midnight/75">
-            Every testimonial here is copied directly from the Valley Airporter review archive. Scroll to experience the voice of over 150 travellers.
+            Every testimonial here is copied directly from the <span className="font-semibold text-horizon">Google Reviews Official Directory</span>. Scroll to experience the voice of over 150 travellers.
           </p>
         </div>
         <ResponsiveImage

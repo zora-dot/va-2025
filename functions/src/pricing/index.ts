@@ -58,6 +58,7 @@ export interface PricingArgs {
   destination: string;
   passengerCount: number;
   preferredVehicle?: "standard" | "van";
+  preferredRateKey?: string | null;
   originAddress?: string | null;
   destinationAddress?: string | null;
   originLatLng?: LatLng | null;
@@ -112,12 +113,12 @@ const passengerKeyMatcher = (passengerCount: number): string[] => {
   if (passengerCount >= 12) return ["12-14", "14"];
   if (passengerCount >= 8) return ["8-11", "11"];
   if (passengerCount >= 7) return ["7v", "7"];
-  if (passengerCount >= 6) return ["6v", "6"];
+  if (passengerCount === 6) return ["6", "6v"];
   if (passengerCount <= 0) return [];
   return [passengerCount.toString()];
 };
 
-const usesSevenSeater = (passengerCount: number): boolean => passengerCount <= 5;
+const usesSevenSeater = (passengerCount: number): boolean => passengerCount <= 6;
 
 const splitRates = (rates: PricingVehicleRates | undefined) => {
   const numeric: NumericRates = {};
@@ -146,7 +147,11 @@ const pickRateKey = (
   rates: NumericRates,
   passengerCount: number,
   preferred?: "standard" | "van",
+  preferredRateKey?: string | null,
 ): string | null => {
+  if (preferredRateKey && rates[preferredRateKey] != null) {
+    return preferredRateKey;
+  }
   const candidateKeys = passengerKeyMatcher(passengerCount);
   if (!candidateKeys.length) return Object.keys(rates)[0] ?? null;
 
@@ -266,6 +271,7 @@ export const calculatePricing = async ({
   destination,
   passengerCount,
   preferredVehicle,
+  preferredRateKey,
   originAddress,
   destinationAddress,
   originLatLng,
@@ -296,7 +302,7 @@ export const calculatePricing = async ({
     lookupOrigin = destination;
     lookupDestination = origin;
     lookupOriginAddress = destinationAddress ?? null;
-   lookupOriginLatLng = destinationLatLng ?? null;
+    lookupOriginLatLng = destinationLatLng ?? null;
     lookupDestinationAddress = originAddress ?? null;
     lookupDestinationLatLng = originLatLng ?? null;
   }
@@ -344,10 +350,10 @@ export const calculatePricing = async ({
 
   const { numeric, distanceRule } = splitRates(rates);
   const availableVehicles = Object.keys(numeric);
-  const vehicleKey = pickRateKey(numeric, passengerCount, preferredVehicle);
+  const vehicleKey = pickRateKey(numeric, passengerCount, preferredVehicle, preferredRateKey);
   const rawBaseRate = vehicleKey ? numeric[vehicleKey] ?? null : null;
   const baseRate = rawBaseRate != null ? Math.round(rawBaseRate) : null;
-  const shouldApplyDistanceRule = Boolean(distanceRule) && passengerCount <= 5;
+  const shouldApplyDistanceRule = Boolean(distanceRule) && passengerCount <= 6 && !preferredRateKey;
 
   if (!rates || (!distanceRule && baseRate == null)) {
     logger.warn("pricing: missing applicable rate", {
