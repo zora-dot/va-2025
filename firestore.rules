@@ -4,9 +4,20 @@ service cloud.firestore {
 
     function isSignedIn() { return request.auth != null; }
     function isSelf(uid)  { return isSignedIn() && request.auth.uid == uid; }
+    function hasRole(target) {
+      return isSignedIn()
+        && (
+          (request.auth.token.role != null && request.auth.token.role == target)
+          || (request.auth.token.roles != null && request.auth.token.roles.hasAny([target]))
+        );
+    }
     function isAdmin() {
       return isSignedIn()
-        && (request.auth.token.admin == true || request.auth.token.role == 'admin');
+        && (
+          request.auth.token.admin == true
+          || hasRole('admin')
+          || hasRole('assign')
+        );
     }
     function normalizedEmail(email) {
       return email == null ? null : email.lower();
@@ -55,6 +66,12 @@ service cloud.firestore {
               && resource.data.passenger.email != null
               && normalizedEmail(resource.data.passenger.email) == request.auth.token.email.lower())
           ));
+    }
+
+    // --- Drivers directory ---
+    match /drivers/{driverId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // --- Driver inspections ---

@@ -647,8 +647,8 @@ export const confirmQuote = async (input: ConfirmQuoteInput) => {
   const passengerSurchargeCents = Math.round((data.pricing.surcharges.passengers ?? 0) * 100)
   const distanceSurchargeCents = Math.round((data.pricing.surcharges.distance ?? 0) * 100)
   const extraKmCents = Math.round((data.pricing.surcharges.extraKilometers ?? 0) * 100)
-  const lockedSubtotalCents = baseCents + passengerSurchargeCents + distanceSurchargeCents + extraKmCents
-  const lockedTotalCents = Math.max(Math.round(data.pricing.total * 100), lockedSubtotalCents)
+  const rawSubtotalCents = baseCents + passengerSurchargeCents + distanceSurchargeCents + extraKmCents
+  const lockedSubtotalCents = Math.round(rawSubtotalCents / 100) * 100
   const tipCents = Math.max(0, Math.round((input.payment.tipAmount ?? 0) * 100))
   const applyGst = input.payment.preference === "pay_now"
   const gstCents = applyGst ? Math.round(lockedSubtotalCents * GST_RATE) : 0
@@ -671,12 +671,7 @@ export const confirmQuote = async (input: ConfirmQuoteInput) => {
       : undefined
 
   const pricingSnapshot = {
-    baseRate: roundToCurrency(
-      data.pricing.base +
-        (data.pricing.surcharges.passengers ?? 0) +
-        (data.pricing.surcharges.distance ?? 0) +
-        (data.pricing.surcharges.extraKilometers ?? 0),
-    ),
+    baseRate: lockedSubtotalCents / 100,
     vehicleKey: data.trip.vehicleAutoAssigned,
     availableVehicles: [] as string[],
     distanceRuleApplied: Boolean(data.pricing.surcharges.distance ?? data.pricing.surcharges.extraKilometers),
@@ -826,6 +821,8 @@ export const confirmQuote = async (input: ConfirmQuoteInput) => {
     }
   }
 
+  const displayedTotalCents = lockedSubtotalCents + tipCents
+
   const smsContext: SmsBookingContext = {
     bookingId: bookingRef.id,
     bookingNumber,
@@ -843,7 +840,7 @@ export const confirmQuote = async (input: ConfirmQuoteInput) => {
     passengerName,
     passengerCount: bookingTrip.passengerCount,
     specialNotes: input.schedule.notes ?? null,
-    totalCents,
+    totalCents: displayedTotalCents,
     currency: data.pricing.currency,
   }
 
@@ -885,7 +882,7 @@ export const confirmQuote = async (input: ConfirmQuoteInput) => {
     phone: normalizedPhone ?? passengerPhoneRaw,
     baggage: input.passenger.baggage ?? "Normal",
     notes: input.schedule.notes ?? null,
-    totalCents,
+    totalCents: displayedTotalCents,
     tipCents,
     currency: data.pricing.currency,
     paymentPreference: input.payment.preference,

@@ -19,6 +19,7 @@ export interface DriverProfile {
   vehicle?: string | null
   phone?: string | null
   email?: string | null
+  calendarId?: string | null
   active?: boolean | null
   note?: string | null
   dutyStatus?: "on" | "off" | "break" | null
@@ -79,6 +80,12 @@ const driverConverter: FirestoreDataConverter<DriverProfile> = {
           ? data.email
           : typeof data.contactEmail === "string"
             ? data.contactEmail
+            : null,
+      calendarId:
+        typeof data.calendarId === "string"
+          ? data.calendarId
+          : typeof data.calendar === "string"
+            ? data.calendar
             : null,
       active:
         typeof data.active === "boolean"

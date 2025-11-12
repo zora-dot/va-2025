@@ -3,6 +3,8 @@ export interface LocationDirectoryEntry {
   latitude: number
   longitude: number
   placeId?: string
+  placeIds?: string[]
+  proximityRadiusKm?: number
   locality?: string
   region?: string
   country?: string
@@ -13,6 +15,9 @@ export const locationDirectory: Record<string, LocationDirectoryEntry> = {
     formattedAddress: "30440 Liberator Ave, Abbotsford, BC V2T 6H5, Canada",
     latitude: 49.0252,
     longitude: -122.3601,
+    placeId: "ChIJuyXxKmZKhFQRXuVp7UwagU4",
+    placeIds: ["ChIJuyXxKmZKhFQRXuVp7UwagU4", "ChIJHeMm52G1hVQR8vmdAEhovKQ"],
+    proximityRadiusKm: 1,
     locality: "Abbotsford",
     region: "BC",
     country: "CA",
@@ -21,6 +26,9 @@ export const locationDirectory: Record<string, LocationDirectoryEntry> = {
     formattedAddress: "3211 Grant McConachie Way, Richmond, BC V7B 0A4, Canada",
     latitude: 49.1947,
     longitude: -123.1792,
+    placeId: "ChIJm6MnhjQLhlQRhIA0hqzMaLo",
+    placeIds: ["ChIJm6MnhjQLhlQRhIA0hqzMaLo"],
+    proximityRadiusKm: 1,
     locality: "Richmond",
     region: "BC",
     country: "CA",
@@ -29,6 +37,7 @@ export const locationDirectory: Record<string, LocationDirectoryEntry> = {
     formattedAddress: "4255 Mitchell Way, Bellingham, WA 98226, United States",
     latitude: 48.7927,
     longitude: -122.5375,
+    proximityRadiusKm: 1,
     locality: "Bellingham",
     region: "WA",
     country: "US",
@@ -53,6 +62,7 @@ export const locationDirectory: Record<string, LocationDirectoryEntry> = {
     formattedAddress: "999 Canada Pl, Vancouver, BC V6C 3T4, Canada",
     latitude: 49.2888,
     longitude: -123.1113,
+     placeIds: ["ChIJh1duaoNxhlQRjXZyXbz3xdM"],
     locality: "Vancouver",
     region: "BC",
     country: "CA",
@@ -62,6 +72,14 @@ export const locationDirectory: Record<string, LocationDirectoryEntry> = {
     latitude: 49.1829,
     longitude: -122.8448,
     locality: "Surrey",
+    region: "BC",
+    country: "CA",
+  },
+  OT: {
+    formattedAddress: "Test OT Location",
+    latitude: 49.0505,
+    longitude: -122.3045,
+    locality: "Abbotsford",
     region: "BC",
     country: "CA",
   },

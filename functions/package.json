@@ -9,13 +9,17 @@
     "lint": "echo \"skip lint\"",
     "clean": "rimraf lib",
     "build": "npm run clean && tsc -p tsconfig.json",
+    "gcp-build": "npm run build",
     "watch": "tsc -w"
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "express": "^4.19.2",
     "firebase-admin": "^12.6.0",
-    "firebase-functions": "^6.5.0",
+    "firebase-functions": "^6.6.0",
+    "googleapis": "^165.0.0",
     "twilio": "^4.20.0"
   },
   "devDependencies": {

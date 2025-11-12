@@ -162,7 +162,6 @@ export const DriverPortal = () => {
       allowedRoles={["driver", "admin"]}
       headline="Driver portal"
       description="Stay updated on your assignments and keep dispatch in the loop."
-      previewMode
     >
       <section className="flex flex-col gap-6 pb-24">
         <GlassPanel className="flex flex-col gap-5 p-7">

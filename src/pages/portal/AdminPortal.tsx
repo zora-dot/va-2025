@@ -136,6 +136,7 @@ const adminCategories: CategoryDefinition[] = [
     icon: PanelLeftClose,
     tone: "bg-horizon/10 text-horizon",
     links: [
+      { label: "Admin assign", to: "/admin/assign", description: "Queue + driver matching board." },
       { label: "Live operations", to: "/portal/admin/operations" },
       { label: "Driver directory", to: "/portal/admin/fleet", description: "Availability, duty status, and contacts." },
     ],
@@ -544,7 +545,6 @@ export const AdminPortal = () => {
       allowedRoles={["admin"]}
       headline="Admin console"
       description="Only Valley Airporter administrators can access this control center. Please contact leadership to request elevated permissions."
-      previewMode
     >
       <section className="flex flex-col gap-6 pb-24">
         <GlassPanel className="p-7">

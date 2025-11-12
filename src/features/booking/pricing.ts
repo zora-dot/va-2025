@@ -10,6 +10,8 @@ import {
 
 export const HOURLY_TOUR_LABEL = "Hourly Tour Shuttle"
 const HOURLY_TOUR_RATE = 100
+const TEST_LOCATION_LABEL = "OT"
+const TEST_BASE_RATE = 1
 
 export type TripDirection = "To the Airport" | "From the Airport"
 
@@ -141,6 +143,18 @@ export const calculatePricing = ({
   preferredVehicle,
   preferredRateKey,
 }: PricingRequest): PricingResult => {
+  const normalizeTestLabel = (value: string) => value.trim().toUpperCase()
+  const isTestLocation = (value: string) => normalizeTestLabel(value) === TEST_LOCATION_LABEL
+  if (isTestLocation(origin) && isTestLocation(destination)) {
+    return {
+      baseRate: TEST_BASE_RATE,
+      vehicleKey: "test",
+      availableVehicles: ["test"],
+      ratesTable: { test: TEST_BASE_RATE },
+      distanceRuleApplied: false,
+    }
+  }
+
   let lookupDirection: TripDirection = direction
   let lookupOrigin = origin
   let lookupDestination = destination

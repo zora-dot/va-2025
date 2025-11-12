@@ -39,6 +39,7 @@ export const AppShell = () => {
   const [isMenuOpen, setMenuOpen] = useState(false)
   const mainRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLElement | null>(null)
+  const defaultRobotsContent = useRef<string | null>(null)
   const [headerHeight, setHeaderHeight] = useState(0)
   const contentOffset = 10
 
@@ -181,6 +182,17 @@ export const AppShell = () => {
     canonicalLink.setAttribute("href", canonicalUrl)
   }, [location.pathname, location.search])
 
+  useEffect(() => {
+    if (typeof document === "undefined") return
+    const robotsMeta = document.head.querySelector<HTMLMetaElement>("meta[name='robots']")
+    if (!robotsMeta) return
+    if (defaultRobotsContent.current == null) {
+      defaultRobotsContent.current = robotsMeta.getAttribute("content") ?? "index,follow"
+    }
+    const isPortalRoute = location.pathname.startsWith("/portal")
+    robotsMeta.setAttribute("content", isPortalRoute ? "noindex, nofollow" : defaultRobotsContent.current)
+  }, [location.pathname])
+
   return (
     <div className="flex min-h-screen flex-col text-midnight">
       <BackgroundCanvases />
@@ -238,34 +250,34 @@ export const AppShell = () => {
         {isMenuOpen ? (
           <div className="border-t border-white/40 px-4 pb-6 pt-2 text-midnight md:hidden">
             <nav className="flex flex-col gap-2">
-            {navItems.map((item) => {
-              const isActive = activePath === item.to
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMenuOpen(false)}
-                  className={clsx(
-                    "px-4 py-2 text-sm font-medium text-midnight transition",
-                    isActive && "text-horizon underline decoration-horizon/60 decoration-2 underline-offset-6",
-                  )}
+              {navItems.map((item) => {
+                const isActive = activePath === item.to
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMenuOpen(false)}
+                    className={clsx(
+                      "px-4 py-2 text-sm font-medium text-midnight transition",
+                      isActive && "text-horizon underline decoration-horizon/60 decoration-2 underline-offset-6",
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              })}
+              {auth.user ? (
+                <button
+                  onClick={() => {
+                    setMenuOpen(false)
+                    void handleSignOut()
+                  }}
+                  className="va-button va-button--secondary w-full justify-center"
                 >
-                  {item.label}
-                </Link>
-              )
-            })}
-            {auth.user ? (
-              <button
-                onClick={() => {
-                  setMenuOpen(false)
-                  void handleSignOut()
-                }}
-                className="va-button va-button--secondary w-full justify-center"
-              >
-                Sign Out
-              </button>
-            ) : null}
-          </nav>
+                  Sign Out
+                </button>
+              ) : null}
+            </nav>
           </div>
         ) : null}
       </header>
@@ -273,7 +285,7 @@ export const AppShell = () => {
         role="main"
         id="main-content"
         ref={mainRef}
-        className="relative z-30 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 pb-16 text-midnight sm:px-8"
+        className="relative z-30 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 pb-32 text-midnight sm:px-8 md:pb-16"
         style={{
           paddingTop: `${contentOffset}px`,
           scrollPaddingTop: `var(--va-header-height, ${headerHeight}px)`,

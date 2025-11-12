@@ -168,7 +168,7 @@
         "distanceRule": {
           "type": "distance",
           "baseFare": 100,
-          "baseDistanceKm": 80,
+          "baseDistanceKm": 76,
           "perKmRate": 1.5,
           "additionalPassengerFee": 10,
           "target": {
@@ -197,7 +197,7 @@
         "distanceRule": {
           "type": "distance",
           "baseFare": 110,
-          "baseDistanceKm": 80,
+          "baseDistanceKm": 76,
           "perKmRate": 2,
           "additionalPassengerFee": 10,
           "target": {
@@ -398,6 +398,24 @@
           "7v": 85,
           "8-11": 110,
           "12-14": 135
+        },
+        "distanceRule": null
+      },
+      {
+        "destination": "Vancouver International Airport (YVR)",
+        "label": "To/From Vancouver Airport",
+        "baseFare": 110,
+        "rates": {
+          "1": 110,
+          "2": 120,
+          "3": 130,
+          "4": 140,
+          "5": 150,
+          "6": 160,
+          "6v": 250,
+          "7v": 250,
+          "8-11": 310,
+          "12-14": 350
         },
         "distanceRule": null
       }
@@ -817,7 +835,7 @@
     ]
   },
   {
-    "label": "Harrison (Any Address)",
+    "label": "Harrison Hot Springs (Any Address)",
     "lat": null,
     "lng": null,
     "routes": [
@@ -842,7 +860,7 @@
     ]
   },
   {
-    "label": "Harrison Mills (Any Address)",
+    "label": "Harrison Hot Springs (Any Address)",
     "lat": null,
     "lng": null,
     "routes": [
@@ -885,7 +903,7 @@
     ]
   },
   {
-    "label": "Harrison Springs (Any Address)",
+    "label": "Harrison Hot Springs (Any Address)",
     "lat": null,
     "lng": null,
     "routes": [

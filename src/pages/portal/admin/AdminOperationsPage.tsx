@@ -12,11 +12,13 @@ import {
   useUpdateBookingPricing,
   useUpdateBookingStatus,
 } from "@/features/bookings/hooks"
+import { ManualBookingQuickEntry } from "@/features/bookings/components/ManualBookingQuickEntry"
 import type { BookingAssignment, BookingItem, BookingScope } from "@/features/bookings/types"
 import { PRICING_ADJUST_REASON_CODES, STATUS_REASON_CODES } from "@/features/bookings/constants"
 import { useSavedBookingViews } from "@/features/admin/useSavedBookingViews"
 import { useDriversDirectory, type DriverProfile } from "@/features/drivers/hooks"
 import { useFirebase } from "@/lib/hooks/useFirebase"
+import { logSmokeEvent } from "@/lib/diagnostics/logSmokeEvent"
 import {
   Timestamp,
   collection,
@@ -58,6 +60,14 @@ const MIN_WIDTH_RATIO = 0.045
 const TIMELINE_HOUR_WIDTH = 56
 const LANE_HEIGHT_PX = 88
 const LANE_GAP_PX = 18
+
+type SmokeLogEntry = {
+  event: string
+  ts: string
+  meta?: Record<string, unknown>
+}
+
+type SmokeWindow = typeof window & { __vaSmokeLog__?: SmokeLogEntry[] }
 
 const STATUS_CHIP_TONES: Record<"warning" | "primary" | "info" | "success" | "danger", string> = {
   warning: "border-amber-200 bg-amber-50 text-amber-700",
@@ -193,6 +203,7 @@ export const AdminOperationsPage = () => {
       description="Deep dive into dispatch, overrides, and coverage planning."
     >
       <section className="flex flex-col gap-6 pb-24">
+        <ManualBookingQuickEntry />
         <DispatchWorkspace />
 
         <GlassPanel className="flex flex-col gap-4 p-6">
@@ -280,6 +291,29 @@ const DispatchWorkspace = () => {
     requireSecondApproval: false,
   })
   const [quoteRequests, setQuoteRequests] = useState<QuoteRequestItem[]>([])
+  const [quoteEdits, setQuoteEdits] = useState<Record<string, { amount: string; note: string }>>({})
+  const [quoteLoading, setQuoteLoading] = useState(false)
+  const [quoteError, setQuoteError] = useState<Error | null>(null)
+  const [quoteFilter, setQuoteFilter] = useState<"open" | "approved" | "declined" | "all">("open")
+  const [quoteSearch, setQuoteSearch] = useState("")
+  const [quoteActionState, setQuoteActionState] = useState<Record<string, boolean>>({})
+  const [smokeEvents, setSmokeEvents] = useState<SmokeLogEntry[]>([])
+
+  const readSmokeLog = useCallback(() => {
+    if (typeof window === "undefined") return [] as SmokeLogEntry[]
+    const store = (window as SmokeWindow).__vaSmokeLog__ ?? []
+    return [...store].sort((a, b) => (a.ts < b.ts ? 1 : -1))
+  }, [])
+
+  const handleRefreshSmokeLog = useCallback(() => {
+    setSmokeEvents(readSmokeLog())
+  }, [readSmokeLog])
+
+  const handleClearSmokeLog = useCallback(() => {
+    if (typeof window === "undefined") return
+    ;(window as SmokeWindow).__vaSmokeLog__ = []
+    setSmokeEvents([])
+  }, [])
 
   const savedViewFilters = useMemo<BookingViewFilters[]>(
     () =>
@@ -402,6 +436,19 @@ const DispatchWorkspace = () => {
     return () => unsubscribe()
   }, [firebase.firestore])
 
+  useEffect(() => {
+    setSmokeEvents(readSmokeLog())
+    if (typeof window === "undefined") return
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<SmokeLogEntry>).detail
+      setSmokeEvents((prev) => [detail, ...prev])
+    }
+    window.addEventListener("va-smoke-log", handler as EventListener)
+    return () => {
+      window.removeEventListener("va-smoke-log", handler as EventListener)
+    }
+  }, [readSmokeLog])
+
   const {
     bookings,
     loading: bookingsLoading,
@@ -438,6 +485,26 @@ const DispatchWorkspace = () => {
   const dayStartMs = selectedDate.getTime()
   const dayEndMs = dayStartMs + MINUTES_IN_DAY * MS_PER_MINUTE
 
+  const viewFilterFn = useCallback(
+    (booking: BookingItem) => {
+      const driverFilter = currentView.driver?.toLowerCase()
+      const paymentFilter = currentView.payment
+      const driverMatches =
+        !driverFilter ||
+        driverFilter === "all" ||
+        (booking.assignment?.driverId && booking.assignment.driverId.toLowerCase().includes(driverFilter)) ||
+        (booking.assignment?.driverName && booking.assignment.driverName.toLowerCase().includes(driverFilter))
+
+      const paymentMatches =
+        !paymentFilter ||
+        paymentFilter === "all" ||
+        (booking.payment?.preference ?? "pay_on_arrival") === paymentFilter
+
+      return driverMatches && paymentMatches
+    },
+    [currentView.driver, currentView.payment],
+  )
+
   const bookingsMatchingView = useMemo(
     () => bookings.filter((booking) => viewFilterFn(booking)),
     [bookings, viewFilterFn],
@@ -467,6 +534,18 @@ const DispatchWorkspace = () => {
     [bookingLookup, selected, selectedIds],
   )
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
+
+  const handleSelectionChange = useCallback((booking: BookingItem, nextSelected: boolean) => {
+    setSelected((prev) => {
+      const next = { ...prev }
+      if (nextSelected) {
+        next[booking.id] = booking
+      } else {
+        delete next[booking.id]
+      }
+      return next
+    })
+  }, [])
 
   const airportOptions = useMemo(() => {
     const codes = new Set<string>()
@@ -878,26 +957,6 @@ const DispatchWorkspace = () => {
       ? [primaryBooking]
       : []
 
-  const viewFilterFn = useCallback(
-    (booking: BookingItem) => {
-      const driverFilter = currentView.driver?.toLowerCase()
-      const paymentFilter = currentView.payment
-      const driverMatches =
-        !driverFilter ||
-        driverFilter === "all" ||
-        (booking.assignment?.driverId && booking.assignment.driverId.toLowerCase().includes(driverFilter)) ||
-        (booking.assignment?.driverName && booking.assignment.driverName.toLowerCase().includes(driverFilter))
-
-      const paymentMatches =
-        !paymentFilter ||
-        paymentFilter === "all" ||
-        (booking.payment?.preference ?? "pay_on_arrival") === paymentFilter
-
-      return driverMatches && paymentMatches
-    },
-    [currentView.driver, currentView.payment],
-  )
-
   const handleViewSelect = useCallback((viewId: string) => {
     setCurrentViewId(viewId)
     setSelected({})
@@ -1018,18 +1077,6 @@ const DispatchWorkspace = () => {
   const requireReasonForForm = selectionTargets.some((booking) =>
     requiresReason(booking.status ?? "pending", statusForm.status),
   )
-
-  const handleSelectionChange = useCallback((booking: BookingItem, nextSelected: boolean) => {
-    setSelected((prev) => {
-      const next = { ...prev }
-      if (nextSelected) {
-        next[booking.id] = booking
-      } else {
-        delete next[booking.id]
-      }
-      return next
-    })
-  }, [])
 
   const handleStatusSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

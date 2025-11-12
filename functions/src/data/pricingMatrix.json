@@ -135,7 +135,7 @@
         "_distanceRule": {
           "type": "distance",
           "baseFare": 100,
-          "baseDistanceKm": 80,
+          "baseDistanceKm": 76,
           "perKmRate": 1.5,
           "additionalPassengerFee": 10,
           "target": {
@@ -159,7 +159,7 @@
         "_distanceRule": {
           "type": "distance",
           "baseFare": 110,
-          "baseDistanceKm": 80,
+          "baseDistanceKm": 76,
           "perKmRate": 2,
           "additionalPassengerFee": 10,
           "target": {
@@ -294,6 +294,18 @@
         "7v": 85,
         "8-11": 110,
         "12-14": 135
+      },
+      "Vancouver International Airport (YVR)": {
+        "1": 110,
+        "2": 120,
+        "3": 130,
+        "4": 140,
+        "5": 150,
+        "6": 160,
+        "6v": 250,
+        "7v": 250,
+        "8-11": 310,
+        "12-14": 350
       }
     },
     "Bellingham International Airport (BLI)": {
@@ -606,7 +618,7 @@
         "12-14": 450
       }
     },
-    "Harrison Springs (Any Address)": {
+    "Harrison Hot Springs (Any Address)": {
       "Vancouver International Airport (YVR)": {
         "1": 250,
         "2": 260,

@@ -70,6 +70,11 @@ const AdminFleetPage = lazy(async () => {
   return { default: module.AdminFleetPage }
 })
 
+const AdminAssignPage = lazy(async () => {
+  const module = await import("@/pages/portal/admin/AdminAssignPage")
+  return { default: module.AdminAssignPage }
+})
+
 const AdminCommunicationsPage = lazy(async () => {
   const module = await import("@/pages/portal/admin/AdminCommunicationsPage")
   return { default: module.AdminCommunicationsPage }
@@ -240,6 +245,12 @@ const adminOperationsRoute = createRoute({
   component: AdminOperationsPage,
 })
 
+const adminAssignRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin/assign",
+  component: AdminAssignPage,
+})
+
 const adminFleetRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/portal/admin/fleet",
@@ -348,6 +359,7 @@ const routeTree = rootRoute.addChildren([
   driverToolsRoute,
   adminRoute,
   adminOperationsRoute,
+  adminAssignRoute,
   adminFleetRoute,
   adminCommunicationsRoute,
   adminAnalyticsRoute,

@@ -102,7 +102,7 @@ export const queueBookingEmail = async ({
   const tipDisplay = tipCents > 0 ? formatCurrency(tipCents) : "—";
   const paymentMethod = paymentPreference === "pay_now" ? "Pay online now" : "Pay driver via cash or card";
   const totalDisplay = formatCurrency(totalCents);
-  const subject = `Valley Airporter - Form #${bookingNumber} - From: ${customerName}`;
+  const subject = `Valley Airporter - Booking #${bookingNumber} - From: ${customerName}`;
 
   const formatFriendlyDateTime = (value: Date) =>
     new Intl.DateTimeFormat("en-US", {
@@ -289,6 +289,10 @@ export const queueBookingEmail = async ({
 
   const db = firestore();
   const bookingRef = db.collection("bookings").doc(bookingId);
+  const supportEmail = SUPPORT_EMAIL.trim().toLowerCase();
+  const ccRecipients =
+    supportEmail && supportEmail !== normalizedEmail ? [supportEmail] : [];
+  const combinedRecipients = [normalizedEmail, ...ccRecipients];
 
   await db.runTransaction(async (tx) => {
     const bookingSnap = await tx.get(bookingRef);
@@ -301,14 +305,12 @@ export const queueBookingEmail = async ({
     }
 
     const mailRef = db.collection("mail").doc();
-    const recipients = Array.from(
-      new Set([normalizedEmail, SUPPORT_EMAIL].filter((value): value is string => Boolean(value))),
-    );
 
     tx.set(
       mailRef,
       {
-        to: recipients,
+        to: combinedRecipients[0],
+        ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
         createdOn: firestore.FieldValue.serverTimestamp(),
         message: {
           subject,
@@ -336,7 +338,7 @@ export const queueBookingEmail = async ({
                 at: firestore.FieldValue.serverTimestamp(),
                 mailId: mailRef.id,
                 subject,
-                to: recipients,
+                to: combinedRecipients,
               },
             },
           },
@@ -396,8 +398,14 @@ export const queuePaymentConfirmationEmail = async ({
   );
   if (recipients.length === 0) return;
 
-  const formLabel = bookingNumber != null ? `#${bookingNumber}` : `#${bookingId}`;
-  const subject = `Payment confirmed for Form ${formLabel}`;
+  const paddedBookingNumber =
+    typeof bookingNumber === "number" && Number.isFinite(bookingNumber)
+      ? bookingNumber.toString().padStart(5, "0")
+      : null;
+  const bookingLabel = paddedBookingNumber ?? bookingId;
+  const heroTitle = paddedBookingNumber ? `Booking #${paddedBookingNumber}` : `Booking ${bookingLabel}`;
+  const bookingReference = paddedBookingNumber ? `#${paddedBookingNumber}` : `#${bookingLabel}`;
+  const subject = `Valley Airporter - Booking #${bookingLabel} has been paid online`;
   const greetingName = (customerName ?? "").trim() || "there";
   const rawPassengerEmail = typeof customerEmail === "string" ? customerEmail.trim() : "";
 
@@ -474,18 +482,18 @@ export const queuePaymentConfirmationEmail = async ({
     { label: "Passenger", value: passengerLine },
     { label: "Passenger email", value: rawPassengerEmail || null },
     { label: "Passenger phone", value: customerPhone?.trim() ?? null },
-    { label: "Form reference", value: formLabel },
+    { label: "Booking reference", value: bookingReference },
   ];
 
   const detailHtml = detailItems
     .filter((item) => item.value && item.value.trim().length > 0 && item.value !== "—")
     .map(
       (item) => `
-        <div style="flex: 1 1 220px; padding: 12px 14px; border-radius: 14px; background: #ffffff; box-shadow: inset 0 0 0 1px rgba(15, 77, 153, 0.08);">
-          <div style="text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.62rem; color: rgba(17, 45, 92, 0.55); margin-bottom: 0.35rem;">
+        <div style="flex: 1 1 220px; padding: 14px 16px; border-radius: 18px; background: #f5f9ff; border: 1px solid rgba(21, 75, 138, 0.12); box-shadow: 0 14px 32px -24px rgba(15, 52, 96, 0.7);">
+          <div style="text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.6rem; color: rgba(15, 45, 92, 0.7); margin-bottom: 0.4rem;">
             ${item.label}
           </div>
-          <div style="font-size: 0.95rem; font-weight: 600; color: #10213f; word-break: break-word;">
+          <div style="font-size: 1rem; font-weight: 600; color: #0f203d; word-break: break-word;">
             ${item.value}
           </div>
         </div>
@@ -494,35 +502,45 @@ export const queuePaymentConfirmationEmail = async ({
     .join("");
 
   const html = `
-    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; background: #f4f7fb; padding: 24px;">
-      <div style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 22px 48px -32px rgba(15, 46, 102, 0.45);">
-        <div style="background: linear-gradient(135deg, #0f4c81 0%, #6fbfff 100%); padding: 28px 30px; color: #ffffff;">
-          <p style="margin: 0; text-transform: uppercase; letter-spacing: 0.28em; font-size: 11px; opacity: 0.92;">
-            Payment Confirmed
+    <div style="font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; background: linear-gradient(135deg, #e0f2ff 0%, #f8fbff 100%); padding: 28px;">
+      <div style="max-width: 640px; margin: 0 auto; border-radius: 32px; overflow: hidden; background: #ffffff; box-shadow: 0 25px 65px -30px rgba(24, 73, 135, 0.45);">
+        <div style="background: linear-gradient(135deg, #7cc8ff 0%, #1b4f91 100%); padding: 36px 32px; color: #ffffff; text-align: center;">
+          <img src="https://i.postimg.cc/R0q7gbmw/compressed-transparent-logo.png" alt="Valley Airporter" style="width: 120px; height: auto; margin-bottom: 14px;" />
+          <p style="margin: 0; text-transform: uppercase; letter-spacing: 0.28em; font-size: 11px; opacity: 0.85;">
+            Payment Received
           </p>
-          <h1 style="margin: 14px 0 0; font-size: 26px; font-weight: 600;">
-            Form ${formLabel}
+          <h1 style="margin: 12px 0 8px; font-size: 30px; font-weight: 600;">
+            ${heroTitle}
           </h1>
+          <p style="margin: 0; font-size: 15px; line-height: 1.6; opacity: 0.9;">
+            Thank you for supporting local transportation across the Fraser Valley.
+          </p>
         </div>
-        <div style="padding: 30px;">
-          <p style="margin: 0 0 1.2rem 0; color: #1a2c4b; font-size: 1rem; line-height: 1.6;">
+        <div style="padding: 32px 34px; background: #f9fbff;">
+          <p style="margin: 0 0 1.2rem 0; color: #0f2647; font-size: 1rem; line-height: 1.6;">
             Hi ${greetingName},
           </p>
-          <p style="margin: 0 0 1.4rem 0; color: #304363; line-height: 1.65;">
-            We’ve received your payment and confirmed your Valley Airporter shuttle. A copy of your payment details is below for easy reference.
+          <p style="margin: 0 0 1.6rem 0; color: #2b4167; line-height: 1.7;">
+            Your online payment has been confirmed. Our dispatch team has logged the receipt and you are all set for your upcoming ride.
           </p>
-          <div style="border-radius: 22px; background: #eef4ff; padding: 24px;">
-            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
-              ${detailHtml}
-            </div>
+          ${
+            detailHtml
+              ? `<div style="border-radius: 24px; background: #ffffff; padding: 22px 24px; margin-bottom: 1.4rem; border: 1px solid rgba(25, 82, 146, 0.08);">
+                  <div style="display: flex; flex-wrap: wrap; gap: 14px;">
+                    ${detailHtml}
+                  </div>
+                </div>`
+              : ""
+          }
+          <div style="border-radius: 24px; background: linear-gradient(135deg, #c9ebff 0%, #e9f3ff 100%); padding: 20px 24px; margin-bottom: 1.4rem;">
+            <p style="margin: 0 0 0.6rem; font-weight: 600; color: #0f305c;">Need anything else?</p>
+            <p style="margin: 0; color: #133864; line-height: 1.5;">Reply to this email or reach dispatch at <a href="tel:+16047516688" style="color: #0f4c81; text-decoration: none; font-weight: 600;">(604) 751-6688</a>.</p>
           </div>
-          <p style="margin: 1.6rem 0 0; color: #36517a; line-height: 1.6;">
-            Our dispatch team will be in touch if anything else is needed. For last-minute questions, call or text
-            <a href="tel:+16047516688" style="color: #0f4c81; text-decoration: none; font-weight: 600;">(604) 751-6688</a>.
+          <p style="margin: 0; color: #1b3255; line-height: 1.6;">
+            We appreciate you choosing a local operator—your booking keeps Valley Airporter on the road for our community.
           </p>
-          <p style="margin: 1rem 0 0; color: #304363;">
-            Thank you for choosing Valley Airporter.<br/>
-            <span style="font-weight: 600;">Dispatch Team</span>
+          <p style="margin: 1rem 0 0; color: #10213f; font-weight: 600;">
+            With gratitude,<br/>Valley Airporter Dispatch
           </p>
         </div>
       </div>
@@ -530,7 +548,8 @@ export const queuePaymentConfirmationEmail = async ({
   `;
 
   const textLines = [
-    `Payment confirmed for Form ${formLabel}`,
+    `Valley Airporter - Booking ${bookingReference} has been paid online`,
+    "Thank you for supporting local transportation in the Fraser Valley.",
     amountDisplay ? `Amount paid: ${amountDisplay}` : null,
     paymentCompletedDisplay ? `Completed on: ${paymentCompletedDisplay}` : null,
     pickupDisplay ? `Trip date: ${pickupDisplay}` : null,
@@ -540,8 +559,8 @@ export const queuePaymentConfirmationEmail = async ({
     customerPhone ? `Passenger phone: ${customerPhone.trim()}` : null,
     paymentId ? `Payment ID: ${paymentId}` : null,
     paymentOrderId ? `Order reference: ${paymentOrderId}` : null,
-    amountDisplay ? "" : null,
     "Dispatch line: (604) 751-6688",
+    "We appreciate you riding local with Valley Airporter.",
   ]
     .filter((value): value is string => Boolean(value))
     .join("\n");

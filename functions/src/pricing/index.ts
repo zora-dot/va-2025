@@ -75,6 +75,9 @@ export class PricingError extends Error {
   }
 }
 
+const TEST_LOCATION_LABEL = "OT";
+const TEST_BASE_RATE = 1;
+
 const cloneDestinations = (value: PricingOriginDestinations): PricingOriginDestinations =>
   JSON.parse(JSON.stringify(value));
 
@@ -277,6 +280,19 @@ export const calculatePricing = async ({
   originLatLng,
   destinationLatLng,
 }: PricingArgs): Promise<PricingResult> => {
+  const normalizeTestLabel = (value: string) => value.trim().toUpperCase();
+  const isTestLocation = (value: string) => normalizeTestLabel(value) === TEST_LOCATION_LABEL;
+  if (isTestLocation(origin) && isTestLocation(destination)) {
+    logger.info("pricing: OT test route detected");
+    return {
+      baseRate: TEST_BASE_RATE,
+      vehicleKey: "test",
+      availableVehicles: ["test"],
+      ratesTable: { test: TEST_BASE_RATE },
+      distanceRuleApplied: false,
+    };
+  }
+
   logger.info("pricing: calculate request", {
     direction,
     origin,
@@ -289,23 +305,13 @@ export const calculatePricing = async ({
     hasDestinationLatLng: Boolean(destinationLatLng),
   });
 
-  let lookupDirection: TripDirection = direction;
-  let lookupOrigin = origin;
-  let lookupDestination = destination;
-  let lookupOriginAddress = originAddress ?? null;
-  let lookupDestinationAddress = destinationAddress ?? null;
-  let lookupOriginLatLng = originLatLng ?? null;
-  let lookupDestinationLatLng = destinationLatLng ?? null;
-
-  if (direction === "From the Airport") {
-    lookupDirection = "To the Airport";
-    lookupOrigin = destination;
-    lookupDestination = origin;
-    lookupOriginAddress = destinationAddress ?? null;
-    lookupOriginLatLng = destinationLatLng ?? null;
-    lookupDestinationAddress = originAddress ?? null;
-    lookupDestinationLatLng = originLatLng ?? null;
-  }
+  const lookupDirection: TripDirection = direction;
+  const lookupOrigin = origin;
+  const lookupDestination = destination;
+  const lookupOriginAddress = originAddress ?? null;
+  const lookupDestinationAddress = destinationAddress ?? null;
+  const lookupOriginLatLng = originLatLng ?? null;
+  const lookupDestinationLatLng = destinationLatLng ?? null;
 
   logger.info("pricing: normalized lookup", {
     lookupDirection,
@@ -426,9 +432,14 @@ export const calculatePricing = async ({
     extraKilometerCharge: roundUpToFiveCents(breakdown.extraKilometerCharge),
     total: roundUpToFiveCents(breakdown.total),
   };
+  const roundedDistanceTotal = Math.round(normalizedBreakdown.total);
+  const adjustedBreakdown = {
+    ...normalizedBreakdown,
+    total: roundedDistanceTotal,
+  };
 
   return {
-    baseRate: normalizedBreakdown.total,
+    baseRate: roundedDistanceTotal,
     vehicleKey,
     availableVehicles,
     ratesTable: numeric,
@@ -437,7 +448,7 @@ export const calculatePricing = async ({
       km: rawDistance.distanceKm,
       durationMinutes: rawDistance.durationMinutes,
     },
-    breakdown: normalizedBreakdown,
+    breakdown: adjustedBreakdown,
     distanceRule,
   };
 };

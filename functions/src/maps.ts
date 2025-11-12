@@ -60,7 +60,7 @@ export const getDrivingDistance = async ({
   const originParam = encodePlace(origin);
   const destinationParam = encodePlace(destination);
 
-  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originParam}&destination=${destinationParam}&mode=driving&region=CA&key=${apiKey}`;
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originParam}&destination=${destinationParam}&mode=driving&region=CA&alternatives=true&key=${apiKey}`;
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -73,19 +73,32 @@ export const getDrivingDistance = async ({
     throw new MapsError("NO_ROUTE_FOUND", 422, status);
   }
 
-  const leg = payload?.routes?.[0]?.legs?.[0];
-  if (!leg || !leg.distance?.value || !leg.duration?.value) {
+  const routes = payload?.routes ?? [];
+  let bestDistance: number | null = null;
+  let bestDuration: number | null = null;
+
+  for (const route of routes) {
+    const leg = route?.legs?.[0];
+    if (!leg?.distance?.value || !leg?.duration?.value) {
+      continue;
+    }
+    const distanceMeters = Number(leg.distance.value);
+    const durationSeconds = Number(leg.duration.value);
+    if (!Number.isFinite(distanceMeters) || !Number.isFinite(durationSeconds)) {
+      continue;
+    }
+    if (bestDistance === null || distanceMeters < bestDistance) {
+      bestDistance = distanceMeters;
+      bestDuration = durationSeconds;
+    }
+  }
+
+  if (bestDistance === null || bestDuration === null) {
     throw new MapsError("NO_ROUTE_FOUND", 422, payload);
   }
 
-  const distanceMeters = Number(leg.distance.value);
-  const durationSeconds = Number(leg.duration.value);
-  if (!Number.isFinite(distanceMeters) || !Number.isFinite(durationSeconds)) {
-    throw new MapsError("INVALID_ROUTE_RESPONSE", 422, leg);
-  }
-
-  const distanceKm = Math.round((distanceMeters / 1000) * 100) / 100;
-  const durationMinutes = Math.round(durationSeconds / 60);
+  const distanceKm = Math.round((bestDistance / 1000) * 100) / 100;
+  const durationMinutes = Math.round(bestDuration / 60);
 
   return {
     distanceKm,

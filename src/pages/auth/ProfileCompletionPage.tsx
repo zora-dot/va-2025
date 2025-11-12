@@ -62,6 +62,25 @@ export const ProfileCompletionPage = () => {
 
   const digitsOnly = useCallback((value: string) => value.replace(/\D/g, ""), [])
 
+  const formatPhoneForAuth = useCallback(
+    (value: string): string | null => {
+      const trimmed = value.trim()
+      if (!trimmed) return null
+      if (trimmed.startsWith("+") && digitsOnly(trimmed).length >= 10) {
+        return trimmed
+      }
+      const digits = digitsOnly(trimmed)
+      if (digits.length === 11 && digits.startsWith("1")) {
+        return `+${digits}`
+      }
+      if (digits.length === 10) {
+        return `+1${digits}`
+      }
+      return null
+    },
+    [digitsOnly],
+  )
+
   const redirectTarget = useMemo(() => {
     if (typeof search?.redirect === "string" && search.redirect.trim()) {
       return search.redirect
@@ -164,8 +183,8 @@ export const ProfileCompletionPage = () => {
       setVerificationError("Add a phone number before requesting a code.")
       return
     }
-    const digitCount = digitsOnly(phone).length
-    if (digitCount < 10) {
+    const normalizedForAuth = formatPhoneForAuth(phone)
+    if (!normalizedForAuth) {
       setVerificationError("Enter a valid phone number including area code.")
       return
     }
@@ -173,7 +192,7 @@ export const ProfileCompletionPage = () => {
     setVerificationStatus("sending")
     try {
       initializePhoneRecaptcha("recaptcha-container")
-      const confirmation = await sendPhoneVerificationCode(phone.trim(), "recaptcha-container")
+      const confirmation = await sendPhoneVerificationCode(normalizedForAuth, "recaptcha-container")
       setConfirmationResult(confirmation)
       setPhoneVerified(false)
       setVerificationCode("")

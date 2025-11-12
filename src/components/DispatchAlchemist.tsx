@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import clsx from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
 import Lottie from "lottie-react";
 
 export type PriceCalcResult = { total: number; currency?: string };
 
 type AnimationData = Record<string, unknown>;
+
+const hexToRgba = (hex: string, alpha = 1) => {
+  const sanitized = hex.replace("#", "");
+  const bigint = Number.parseInt(sanitized, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 type Theme = {
   progressColor?: string;
@@ -29,6 +39,7 @@ type DispatchAlchemistProps = {
   calculatePrice: () => Promise<PriceCalcResult>;
   theme?: Theme;
   onComplete?: (r: PriceCalcResult) => void;
+  footerSlot?: ReactNode;
 };
 
 export default function DispatchAlchemist({
@@ -49,6 +60,7 @@ export default function DispatchAlchemist({
   calculatePrice,
   theme,
   onComplete,
+  footerSlot,
 }: DispatchAlchemistProps) {
   const [elapsed, setElapsed] = useState(0);
   const [timerDone, setTimerDone] = useState(false);
@@ -73,7 +85,10 @@ export default function DispatchAlchemist({
   const stepMs = useMemo(() => durationMs / messages.length, [durationMs, messages.length]);
   const index = Math.min(messages.length - 1, Math.floor(elapsed / stepMs));
   const progress = Math.round((elapsed / durationMs) * 100);
-  const activeAnim = index % 2 === 0 ? carsAnimation : driverAnimation;
+  const googlePalette = ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#4285F4", "#EA4335"];
+  const googleColor = googlePalette[index % googlePalette.length];
+  const nextGoogleColor = googlePalette[(index + 1) % googlePalette.length];
+  const googleShadow = hexToRgba(googleColor, 0.35);
   const remainingSeconds = Math.max(0, Math.ceil((durationMs - elapsed) / 1000));
 
   useEffect(() => {
@@ -161,24 +176,34 @@ export default function DispatchAlchemist({
         }}
       />
 
-      <div className="flex flex-col gap-3 pb-5">
-        <motion.svg aria-hidden viewBox="0 0 200 120" className="mx-auto h-20 w-9/12 max-w-sm shrink-0">
-          <motion.path
-            d="M10,100 C40,20 160,20 190,100"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            style={{ color: "#818cf8" }}
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 2, repeat: Infinity, repeatDelay: 0.5, ease: "easeInOut" }}
-          />
-          <circle cx="10" cy="100" r="3" fill="#4f46e5" />
-          <circle cx="190" cy="100" r="3" fill="#c026d3" />
-        </motion.svg>
+      <div className="flex flex-col gap-6 pb-5 sm:flex-row sm:items-center">
+        <div className="flex flex-1 justify-center">
+          <motion.svg aria-hidden viewBox="0 0 200 120" className="h-24 w-full max-w-sm">
+            <motion.path
+              d="M10,100 C40,20 160,20 190,100"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="4"
+              style={{ color: "#818cf8" }}
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 0.5, ease: "easeInOut" }}
+            />
+            <circle cx="10" cy="100" r="10" fill="#4f46e5" />
+            <circle cx="190" cy="100" r="10" fill="#c026d3" />
+          </motion.svg>
+        </div>
 
-        <div className="mx-auto w-full max-w-md rounded-3xl bg-white/80 p-3 shadow-inner" style={{ minHeight: 160 }}>
-          <Lottie animationData={activeAnim} loop autoplay style={{ width: "100%", height: "140px" }} />
+        <div className="flex flex-1 justify-center">
+          <div
+            className="relative rounded-3xl bg-white/80 p-4 shadow-inner flex items-center justify-center"
+            style={{ width: 280, height: 180 }}
+          >
+            <Lottie animationData={carsAnimation} loop autoplay style={{ width: 260, height: 160 }} />
+            <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+              <Lottie animationData={driverAnimation} loop autoplay style={{ width: "160px", height: "110px" }} />
+            </div>
+          </div>
         </div>
 
         <div className="flex-1">
@@ -191,8 +216,15 @@ export default function DispatchAlchemist({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className="text-center text-base font-semibold text-slate-800 sm:text-left sm:text-lg"
-              style={{ filter: "none" }}
+              className="text-center text-base font-semibold sm:text-left sm:text-lg"
+              style={{
+                color: "transparent",
+                backgroundImage: `linear-gradient(120deg, ${googleColor}, ${nextGoogleColor})`,
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                textShadow: `0 4px 12px ${googleShadow}`,
+                filter: "drop-shadow(0 6px 18px rgba(15, 23, 42, 0.35))",
+              }}
             >
               {messages[index]}
             </motion.div>
@@ -262,8 +294,21 @@ export default function DispatchAlchemist({
         </motion.div>
       </div>
 
-      <div className="mt-4 text-right">
-        <button onClick={skip} className="text-xs text-slate-500 hover:text-slate-700 underline underline-offset-4">
+      <div
+        className={clsx(
+          "mt-4 flex flex-col gap-3 sm:flex-row sm:items-center text-midnight",
+          footerSlot ? "sm:justify-between" : "sm:justify-end",
+        )}
+      >
+        {footerSlot && (
+          <div className="text-center text-sm sm:text-left">
+            {footerSlot}
+          </div>
+        )}
+        <button
+          onClick={skip}
+          className="text-xs font-semibold uppercase tracking-[0.25em] text-horizon hover:text-horizon/80 underline underline-offset-4 self-end sm:self-auto"
+        >
           skip animation
         </button>
       </div>

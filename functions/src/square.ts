@@ -2,7 +2,7 @@ import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions";
 
 const SQUARE_ACCESS_TOKEN = defineSecret("VALLEY_SQUARE_ACCESS_TOKEN");
-const SQUARE_VERSION = "2025-09-24";
+const SQUARE_VERSION = "2024-08-21";
 
 const getDefaultLocationId = () => process.env.SQUARE_LOCATION_ID || "G1W64H4NGNKRY";
 
@@ -35,9 +35,11 @@ export const createSquarePaymentLink = async ({
   const token = SQUARE_ACCESS_TOKEN.value();
   if (!token) throw new Error("Square access token unavailable");
 
+  const displayFareLabel = `${fareLabel} for booking #${bookingNumber.toString().padStart(5, "0")}`;
+
   const lineItems = [
     {
-      name: fareLabel,
+      name: displayFareLabel,
       quantity: "1",
       base_price_money: { amount: fareCents, currency },
     },
@@ -59,6 +61,8 @@ export const createSquarePaymentLink = async ({
     });
   }
 
+  const referenceId = `booking-${bookingNumber}`;
+
   const response = await fetch("https://connect.squareup.com/v2/online-checkout/payment-links", {
     method: "POST",
     headers: {
@@ -70,12 +74,13 @@ export const createSquarePaymentLink = async ({
       idempotency_key: crypto.randomUUID(),
       order: {
         location_id: locationId,
+         reference_id: referenceId,
         line_items: lineItems,
       },
       checkout_options: {
         allow_tipping: false,
       },
-      payment_note: bookingId,
+      payment_note: `Booking #${bookingNumber.toString().padStart(5, "0")} (${bookingId})`,
     }),
   });
 

@@ -1,4 +1,4 @@
-import { type PropsWithChildren } from "react"
+import { useEffect, type PropsWithChildren } from "react"
 import { GlassPanel } from "@/components/ui/GlassPanel"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useFirebase } from "@/lib/hooks/useFirebase"
@@ -11,7 +11,6 @@ type RoleGateProps = PropsWithChildren<{
   allowedRoles: AppUserRole[]
   headline: string
   description?: string
-  previewMode?: boolean
   requireProfile?: boolean
 }>
 
@@ -19,7 +18,6 @@ export const RoleGate = ({
   allowedRoles,
   headline,
   description,
-  previewMode = false,
   requireProfile = true,
   children,
 }: RoleGateProps) => {
@@ -51,23 +49,22 @@ export const RoleGate = ({
     return `${pathname}${search}${hash}`
   })()
   const { profile, loading: profileLoading } = useUserProfile(requireProfile && Boolean(auth.user))
-
-  const allowPreview = true
+  useEffect(() => {
+    if (!auth.loading && !auth.user) {
+      navigate({ to: "/auth", search: { redirect: currentPath } })
+    }
+  }, [auth.loading, auth.user, currentPath, navigate])
 
   if (!firebase.enabled) {
     return (
-      <div className="flex flex-col gap-4">
-        <GlassPanel className="border-dashed border-horizon/40 bg-white/60 p-6 text-center">
-          <p className="font-heading text-base uppercase tracking-[0.32em] text-horizon">
-            Authentication disabled
-          </p>
-          <p className="mt-3 text-sm text-midnight/75">
-            Firebase credentials are not configured. Showing a preview of this section without
-            authentication. Add your Firebase keys to `.env.local` to enable secure access control.
-          </p>
-        </GlassPanel>
-        {children}
-      </div>
+      <GlassPanel className="border-dashed border-horizon/40 bg-white/60 p-6 text-center">
+        <p className="font-heading text-base uppercase tracking-[0.32em] text-horizon">
+          Authentication unavailable
+        </p>
+        <p className="mt-3 text-sm text-midnight/75">
+          Firebase credentials are not configured. Add your Firebase keys to `.env.local` to enable secure access control.
+        </p>
+      </GlassPanel>
     )
   }
 
@@ -85,42 +82,14 @@ export const RoleGate = ({
   }
 
   if (!auth.user) {
-    if (allowPreview) {
-      return (
-        <div className="flex flex-col gap-4">
-          <GlassPanel className="border border-dashed border-horizon/30 bg-white/60 p-6 text-center">
-            <p className="font-heading text-base uppercase tracking-[0.32em] text-horizon">
-              Preview Mode
-            </p>
-            <p className="mt-3 text-sm text-midnight">
-              Sign in to access live data. For now you&apos;re viewing a sample dashboard.
-            </p>
-            <button
-              onClick={() => navigate({ to: "/auth", search: { redirect: currentPath } })}
-              className="mt-4 inline-flex items-center justify-center rounded-full border border-horizon/40 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:bg-horizon hover:text-white"
-            >
-              Sign In
-            </button>
-          </GlassPanel>
-          {children}
-        </div>
-      )
-    }
     return (
       <GlassPanel className="p-6 text-center">
         <p className="font-heading text-base uppercase tracking-[0.32em] text-horizon">
-          Sign in required
+          Redirecting to sign in
         </p>
         <p className="mt-3 text-sm text-midnight">
-          {description ??
-            "You need to sign in before accessing this section of the Valley Airporter app."}
+          {description ?? "Please authenticate to continue."}
         </p>
-        <button
-          onClick={() => navigate({ to: "/auth", search: { redirect: currentPath } })}
-          className="mt-4 inline-flex items-center justify-center rounded-full border border-horizon/40 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:bg-horizon hover:text-white"
-        >
-          Sign In
-        </button>
       </GlassPanel>
     )
   }
@@ -162,22 +131,6 @@ export const RoleGate = ({
   }
 
   if (!auth.hasRole(allowedRoles)) {
-    if (previewMode || allowPreview) {
-      return (
-        <div className="flex flex-col gap-4">
-          <GlassPanel className="border border-dashed border-horizon/30 bg-white/60 p-6 text-center">
-            <p className="font-heading text-base uppercase tracking-[0.32em] text-horizon">
-              Preview Mode
-            </p>
-            <p className="mt-3 text-sm text-midnight">
-              {description ??
-                "You’re viewing a preview of this console. Request elevated permissions in production to access live controls."}
-            </p>
-          </GlassPanel>
-          {children}
-        </div>
-      )
-    }
     return (
       <GlassPanel className="p-6 text-center">
         <p className="font-heading text-base uppercase tracking-[0.32em] text-horizon">

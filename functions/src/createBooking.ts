@@ -18,6 +18,7 @@ import { derivePreferredRateKey } from "./utils/ratePreferences";
 const db = admin.firestore();
 
 const GST_RATE = 0.05;
+const ADMIN_CONFIRMATION_PHONE = process.env.ADMIN_NOTIFICATION_PHONE ?? null;
 
 const formatPickupDisplay = (date: Date) => {
   const datePart = new Intl.DateTimeFormat("en-US", {
@@ -33,6 +34,30 @@ const formatPickupDisplay = (date: Date) => {
     timeZone: SERVICE_TIME_ZONE,
   }).format(date);
   return `${datePart} at ${timePart}`;
+};
+
+const formatBookingNumber = (value: number) => value.toString().padStart(5, "0");
+
+const normalizePhoneNumber = (value?: string | null): string | null => {
+  if (!value) return null;
+  const digits = value.replace(/[^+\d]/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("+")) return digits;
+  if (digits.startsWith("1") && digits.length === 11) return `+${digits}`;
+  return `+1${digits}`;
+};
+
+const buildPhoneVariants = (normalized: string | null): string[] => {
+  if (!normalized) return [];
+  const variants = new Set<string>();
+  variants.add(normalized);
+  if (normalized.startsWith("+")) {
+    variants.add(normalized.substring(1));
+  }
+  if (normalized.startsWith("+1")) {
+    variants.add(normalized.substring(2));
+  }
+  return Array.from(variants).filter(Boolean);
 };
 
 interface TripPayload {
@@ -392,11 +417,11 @@ export const createBooking = onRequest({
       return;
     }
 
-    if (quoteRequestMeta) {
-      pricing.baseRate = resolvedBaseRate;
-    }
+    const roundedBaseRate = Math.round(resolvedBaseRate);
 
-    const baseAmount = quoteRequestMeta ? quoteRequestMeta.amountCents : Math.round(resolvedBaseRate * 100);
+    pricing.baseRate = roundedBaseRate;
+
+    const baseAmount = quoteRequestMeta ? quoteRequestMeta.amountCents : roundedBaseRate * 100;
     const applyGst = payment.preference === "pay_now";
     const gstAmount = applyGst ? Math.round(baseAmount * GST_RATE) : 0;
     const tipAmount = Math.max(0, Math.round((payment.tipAmount ?? 0) * 100));
@@ -438,25 +463,8 @@ export const createBooking = onRequest({
         : null;
 
     const lowerEmail = passenger.email?.trim().toLowerCase() ?? null;
-    const normalizedPhoneRaw = passenger.phone?.replace(/[^+\d]/g, "") ?? null;
-    const normalizedPhone = normalizedPhoneRaw
-      ? normalizedPhoneRaw.startsWith("+")
-        ? normalizedPhoneRaw
-        : normalizedPhoneRaw.startsWith("1") && normalizedPhoneRaw.length === 11
-          ? `+${normalizedPhoneRaw}`
-          : `+1${normalizedPhoneRaw}`
-      : null;
-    const phoneVariants = normalizedPhone
-      ? Array.from(
-          new Set(
-            [
-              normalizedPhone,
-              normalizedPhone.substring(1),
-              normalizedPhone.startsWith("+1") ? normalizedPhone.substring(2) : null,
-            ].filter((value): value is string => Boolean(value)),
-          ),
-        )
-      : [];
+    const normalizedPhone = normalizePhoneNumber(passenger.phone);
+    const phoneVariants = buildPhoneVariants(normalizedPhone);
 
     const lookupKeys = [
       ...(authUser?.uid ? [`uid:${authUser.uid}`] : []),
@@ -464,9 +472,27 @@ export const createBooking = onRequest({
       ...phoneVariants.map((value) => `phone:${value}`),
     ];
 
-    const status = payment.preference === "pay_now" ? "confirmed" : "pending";
+    const status = "confirmed";
+
+    const originDisplay = canonicalTrip.originAddress?.trim() ?
+      canonicalTrip.originAddress :
+      canonicalTrip.origin ?? null;
+    const destinationDisplay = canonicalTrip.destinationAddress?.trim() ?
+      canonicalTrip.destinationAddress :
+      canonicalTrip.destination ?? null;
+    const passengerName = passenger.primaryPassenger?.trim() ?? null;
+    const quoteDisplay = Math.round(baseAmount / 100);
 
     const bookingDoc = {
+      "A0 Booking #": null,
+      "A1 Name": passengerName,
+      "A2 origin address": originDisplay,
+      "A3 destination address": destinationDisplay,
+      "A4 Pasengers": canonicalTrip.passengerCount,
+      "A5 quote": quoteDisplay,
+      "A6 email address": passenger.email?.trim() ?? null,
+      "A7 phone number": normalizedPhone ?? passenger.phone ?? null,
+      "A8 createdAt": now,
       pickupDisplay,
       pickupTimeUtc,
       schedule: {
@@ -548,12 +574,15 @@ export const createBooking = onRequest({
       tx.set(newBookingRef, {
         ...bookingDoc,
         bookingNumber: nextValue,
+        "A0 Booking #": nextValue,
       });
 
       return { bookingRef: newBookingRef, bookingNumber: nextValue };
     });
 
+
     if (normalizedPhone) {
+      const displayedTotalCents = baseAmount + tipAmount;
       const smsContext: SmsBookingContext = {
         bookingId: bookingRef.id,
         bookingNumber,
@@ -571,7 +600,7 @@ export const createBooking = onRequest({
         passengerName: passenger.primaryPassenger,
         passengerCount: canonicalTrip.passengerCount,
         specialNotes: schedule.notes ?? null,
-        totalCents: totalAmount,
+        totalCents: displayedTotalCents,
         currency: bookingDoc.payment.currency,
       };
 
@@ -595,6 +624,24 @@ export const createBooking = onRequest({
           pickupTime: schedule.pickupTime,
         },
       });
+
+      const adminPhone = normalizePhoneNumber(ADMIN_CONFIRMATION_PHONE);
+      if (adminPhone) {
+        const adminMessage = [
+          `New booking #${formatBookingNumber(bookingNumber)} confirmed.`,
+          `${passenger.primaryPassenger}`,
+          `${canonicalTrip.origin ?? "Pickup"} → ${canonicalTrip.destination ?? "Drop-off"}`,
+          `${pickupDisplay}`,
+        ].join(" ");
+        await queueSmsNotification({
+          to: adminPhone,
+          message: adminMessage,
+          metadata: {
+            bookingId: bookingRef.id,
+            type: "admin-confirmation",
+          },
+        });
+      }
     }
 
     let paymentLink: { url?: string; orderId?: string } | undefined;
@@ -623,6 +670,8 @@ export const createBooking = onRequest({
       }
     }
 
+    const displayedTotalCents = baseAmount + tipAmount;
+
     await queueBookingEmail({
       bookingId: bookingRef.id,
       bookingNumber,
@@ -638,7 +687,7 @@ export const createBooking = onRequest({
       phone: passenger.phone,
       baggage: passenger.baggage ?? "Normal",
       notes: schedule.notes ?? null,
-      totalCents: totalAmount,
+      totalCents: displayedTotalCents,
       tipCents: tipAmount,
       currency: "CAD",
       paymentPreference: payment.preference,

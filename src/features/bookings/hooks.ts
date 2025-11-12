@@ -605,11 +605,13 @@ export const useRealtimeBookings = ({
 
 export interface AssignDriverPayload {
   bookingIds: string[]
-  driverId: string
+  driverId?: string
   driverName?: string | null
+  driverIds?: string[]
   driverContact?: {
     phone?: string | null
     email?: string | null
+    calendarId?: string | null
   }
   notify?: {
     email?: boolean

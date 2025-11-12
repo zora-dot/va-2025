@@ -3,11 +3,14 @@ import react from "@vitejs/plugin-react"
 import { VitePWA } from "vite-plugin-pwa"
 import path from "path"
 
+const enablePwa = process.env.VITE_ENABLE_PWA === "true"
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
+    ...(enablePwa
+      ? [VitePWA({
       registerType: "autoUpdate",
       workbox: {
         runtimeCaching: [
@@ -65,7 +68,8 @@ export default defineConfig({
           }
         ]
       }
-    })
+    })]
+      : []),
   ],
   resolve: {
     alias: {

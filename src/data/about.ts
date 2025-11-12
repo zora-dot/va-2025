@@ -3,7 +3,7 @@ export const aboutContent = `About Us - Valley Airporter Ltd.
 ===============
 ### Valley Airporter Shuttle Service
 ### Valley Airporter has been providing Airport Shuttle Transportation Services in the area since 2008.
-We have satisfied over an estimated of 35,000+ Customers, and travelled more than 1,000,000+ KM.
+We have satisfied over an estimated of 10,000+ Customers, and travelled more than 1,000,000+ KM.
 ### We Offer Transportation To Multiple Airports!
 ### Whether you want to travel across the border to fly, or whether you want to fly locally, we’ve got you covered!
 ### **Here is a list of International Airports we service:**

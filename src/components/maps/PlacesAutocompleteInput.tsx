@@ -21,6 +21,8 @@ interface PlacesAutocompleteInputProps extends Omit<InputHTMLAttributes<HTMLInpu
   onPlaceSelect?: (selection: PlaceSelection) => void
   onPlaceCleared?: () => void
   helperText?: string
+  wrapperClassName?: string
+  inputClassName?: string
 }
 
 type Prediction = google.maps.places.AutocompletePrediction
@@ -35,6 +37,35 @@ const PLACE_FIELDS: (keyof google.maps.places.PlaceResult)[] = [
   "place_id",
 ]
 
+const STREET_SUFFIX_MAP: Record<string, string> = {
+  wy: "Way",
+  rd: "Road",
+  ave: "Avenue",
+  av: "Avenue",
+  blvd: "Boulevard",
+  dr: "Drive",
+  hwy: "Highway",
+  ln: "Lane",
+  st: "Street",
+  cir: "Circle",
+  ct: "Court",
+  cts: "Courts",
+  ctr: "Center",
+  pkwy: "Parkway",
+  pl: "Place",
+  sq: "Square",
+}
+
+const expandStreetSuffixes = (value: string) =>
+  value.replace(/\b([A-Za-z]{2,4})\b/g, (match) => {
+    const normalized = match.toLowerCase()
+    const replacement = STREET_SUFFIX_MAP[normalized]
+    if (!replacement) return match
+    if (match === match.toUpperCase()) return replacement.toUpperCase()
+    if (match === match.toLowerCase()) return replacement.toLowerCase()
+    return replacement
+  })
+
 const RESULTS_DEBOUNCE_MS = 180
 
 export const PlacesAutocompleteInput = ({
@@ -46,6 +77,8 @@ export const PlacesAutocompleteInput = ({
   helperText,
   disabled,
   placeholder,
+  wrapperClassName,
+  inputClassName,
   ...rest
 }: PlacesAutocompleteInputProps) => {
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -166,7 +199,7 @@ export const PlacesAutocompleteInput = ({
               return
             }
 
-            const formatted = place.formatted_address ?? prediction.description
+            const formatted = expandStreetSuffixes(place.formatted_address ?? prediction.description)
             const geometry = place.geometry?.location
             const location =
               geometry && typeof geometry.lat === "function" && typeof geometry.lng === "function"
@@ -275,7 +308,10 @@ export const PlacesAutocompleteInput = ({
       setNoResults(false)
 
       if (!prediction.place_id) {
-        latestOnPlaceSelect.current?.({ address: prediction.description, placeId: undefined })
+        latestOnPlaceSelect.current?.({
+          address: expandStreetSuffixes(prediction.description),
+          placeId: undefined,
+        })
         sessionTokenRef.current = newSessionToken()
         return
       }
@@ -290,7 +326,7 @@ export const PlacesAutocompleteInput = ({
           })
 
           selection = {
-            address: place.formattedAddress || prediction.description,
+            address: expandStreetSuffixes(place.formattedAddress || prediction.description),
             placeId: prediction.place_id,
             location: place.location
               ? { lat: place.location.latitude, lng: place.location.longitude }
@@ -307,7 +343,7 @@ export const PlacesAutocompleteInput = ({
 
       if (!selection) {
         selection = {
-          address: prediction.description,
+          address: expandStreetSuffixes(prediction.description),
           placeId: prediction.place_id ?? undefined,
         }
       }
@@ -359,7 +395,7 @@ export const PlacesAutocompleteInput = ({
   }
 
   return (
-    <div className={clsx("w-full space-y-1", className)}>
+    <div className={clsx("w-full space-y-1", className, wrapperClassName)}>
       <div className="relative">
         <input
           ref={inputRef}
@@ -371,6 +407,7 @@ export const PlacesAutocompleteInput = ({
           onKeyDown={handleKeyDown}
           className={clsx(
             "h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30 disabled:cursor-not-allowed disabled:bg-white/50",
+            inputClassName,
           )}
           disabled={disabled}
           autoComplete="off"

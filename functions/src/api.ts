@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import { onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
-import { MAPS_SERVER_KEY } from './maps';
+import { MAPS_SERVER_KEY, getDrivingDistance, MapsError } from './maps';
 import { calculatePricing, PricingError, TripDirection } from './pricing';
 import { resolveLocationDetails } from './data/locationDirectory';
 import { createSquarePaymentLink } from './square';
@@ -14,6 +14,7 @@ import {
   queuePushNotification,
   queueSmsNotification,
 } from './notifications';
+import { incrementDailyCounter } from './utils/dailyCounter';
 import { createQuote, serializeQuoteResponse, updateQuote, attachContact, confirmQuote, getQuote } from './quotesService';
 import { derivePreferredRateKey } from './utils/ratePreferences';
 
@@ -22,6 +23,7 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 const storage = admin.storage();
+const ADMIN_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL ?? 'info@valleyairporter.ca';
 
 const sanitizeDisplayName = (value?: unknown): string | null => {
   if (typeof value === 'string') {
@@ -60,6 +62,68 @@ const sanitizeOptionalNumber = (value: unknown): number | null => {
     return value;
   }
   return null;
+};
+
+const handleQuoteLogPostCreate = async (data: admin.firestore.DocumentData, docId: string) => {
+  await incrementDailyCounter('quoteLogs');
+  const status =
+    typeof data.status === 'string' ? data.status.toLowerCase() : null;
+  if (status && status !== 'success') {
+    void notifyQuoteLogFailure({
+      docId,
+      origin:
+        (typeof data.origin === 'string' && data.origin) ||
+        (typeof data['A2 origin address'] === 'string' ? data['A2 origin address'] : null) ||
+        null,
+      destination:
+        (typeof data.destination === 'string' && data.destination) ||
+        (typeof data['A3 destination address'] === 'string' ? data['A3 destination address'] : null) ||
+        null,
+      passengers:
+        (typeof data.passengers === 'number' ? data.passengers : null) ??
+        (typeof data['A4 Pasengers'] === 'number' ? data['A4 Pasengers'] : null),
+      status,
+      quote:
+        (typeof data.quote === 'number' ? data.quote : null) ??
+        (typeof data['A5 quote'] === 'number' ? data['A5 quote'] : null),
+    });
+  }
+};
+
+const notifyQuoteLogFailure = async ({
+  docId,
+  origin,
+  destination,
+  passengers,
+  status,
+  quote,
+}: {
+  docId: string;
+  origin: string | null;
+  destination: string | null;
+  passengers: number | null;
+  status: string | null;
+  quote: number | null;
+}) => {
+  if (!ADMIN_EMAIL) return;
+  try {
+    await queueEmailNotification({
+      to: ADMIN_EMAIL,
+      subject: 'Quote log attention needed',
+      text: [
+        `A quote log entry recorded a status of "${status ?? 'unknown'}".`,
+        origin ? `Origin: ${origin}` : null,
+        destination ? `Destination: ${destination}` : null,
+        passengers != null ? `Passengers: ${passengers}` : null,
+        quote != null ? `Quote: $${quote.toFixed(2)}` : null,
+        `Log ID: ${docId}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    });
+  } catch (error) {
+    console.warn('quoteLogs: notify admin failed', error);
+  }
 };
 
 const sanitizeVehicleSelections = (value: unknown): string[] => {
@@ -1079,13 +1143,15 @@ app.post('/fares/quote', async (req, res) => {
 
     if (!pricing.baseRate) {
       if (!skipLogging) {
-        await db.collection('quoteLogs').add(quoteLogBase);
+        const ref = await db.collection('quoteLogs').add(quoteLogBase);
+        await handleQuoteLogPostCreate(quoteLogBase, ref.id);
       }
       return res.status(404).json({ error: 'NO_PRICE_AVAILABLE', pricing });
     }
 
     if (!skipLogging) {
-      await db.collection('quoteLogs').add(quoteLogBase);
+      const ref = await db.collection('quoteLogs').add(quoteLogBase);
+      await handleQuoteLogPostCreate(quoteLogBase, ref.id);
     }
 
     res.json(pricing);
@@ -1130,6 +1196,54 @@ app.post('/price', async (req, res) => {
   } catch (error) {
     console.error('price: failed to calculate', error);
     res.status(400).json({ error: 'Bad request' });
+  }
+});
+
+app.post('/distance', async (req, res) => {
+  try {
+    const payload = (req.body || {}) as Record<string, unknown>;
+    const originString =
+      sanitizeStringField((payload.originAddress as string) ?? (payload.origin as string)) ?? null;
+    const destinationString =
+      sanitizeStringField((payload.destinationAddress as string) ?? (payload.destination as string)) ?? null;
+
+    const extractLatLng = (value: unknown) => {
+      if (!value || typeof value !== 'object') return { lat: null, lng: null };
+      const node = value as Record<string, unknown>;
+      return {
+        lat: sanitizeOptionalNumber(node.lat),
+        lng: sanitizeOptionalNumber(node.lng),
+      };
+    };
+
+    const originLatLng = extractLatLng(payload.originLatLng ?? null);
+    const destinationLatLng = extractLatLng(payload.destinationLatLng ?? null);
+
+    const originInput =
+      originLatLng.lat != null && originLatLng.lng != null
+        ? { lat: originLatLng.lat, lng: originLatLng.lng }
+        : originString;
+    const destinationInput =
+      destinationLatLng.lat != null && destinationLatLng.lng != null
+        ? { lat: destinationLatLng.lat, lng: destinationLatLng.lng }
+        : destinationString;
+
+    if (!originInput || !destinationInput) {
+      res.status(400).json({ error: 'ORIGIN_DESTINATION_REQUIRED' });
+      return;
+    }
+
+    const result = await getDrivingDistance({
+      origin: originInput,
+      destination: destinationInput,
+    });
+
+    res.json(result);
+  } catch (error) {
+    const status = error instanceof MapsError ? error.status : 500;
+    res.status(status).json({
+      error: error instanceof Error ? error.message : 'DISTANCE_LOOKUP_FAILED',
+    });
   }
 });
 
@@ -1178,6 +1292,7 @@ app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
     const destinationAddressForDisplay = sanitizeStringField(tripData.destinationAddress) ?? destination;
 
     const docData: admin.firestore.DocumentData = {
+      'A0 Booking #': null,
       'A1 Name': contactSanitized.name ?? null,
       'A2 origin address': originAddressForDisplay,
       'A3 destination address': destinationAddressForDisplay,
@@ -1227,6 +1342,7 @@ app.post('/quoteLogs', optionalAuth, async (req: AuthedReq, res) => {
       return quoteRef;
     });
 
+    await handleQuoteLogPostCreate(docData, ref.id);
     res.status(201).json({ id: ref.id });
   } catch (error) {
     console.error('quoteLogs:create failed', error);
@@ -1253,17 +1369,30 @@ app.patch('/quoteLogs/:logId', optionalAuth, async (req: AuthedReq, res) => {
       const direction = sanitizeStringField(tripData.direction);
       const origin = sanitizeStringField(tripData.origin);
       const destination = sanitizeStringField(tripData.destination);
+      const originAddress =
+        tripData.originAddress !== undefined ? sanitizeStringField(tripData.originAddress) : undefined;
+      const destinationAddress =
+        tripData.destinationAddress !== undefined ? sanitizeStringField(tripData.destinationAddress) : undefined;
+      const passengersValue =
+        tripData.passengers !== undefined ? sanitizeOptionalNumber(tripData.passengers) : undefined;
+      const originProvided =
+        Object.prototype.hasOwnProperty.call(tripData, 'origin') ||
+        Object.prototype.hasOwnProperty.call(tripData, 'originAddress');
+      const destinationProvided =
+        Object.prototype.hasOwnProperty.call(tripData, 'destination') ||
+        Object.prototype.hasOwnProperty.call(tripData, 'destinationAddress');
       if (direction) updates.direction = direction;
       if (origin) updates.origin = origin;
-      if (tripData.originAddress !== undefined) {
-        updates.originAddress = sanitizeStringField(tripData.originAddress);
+      if (originAddress !== undefined) {
+        updates.originAddress = originAddress;
       }
       if (destination) updates.destination = destination;
-      if (tripData.destinationAddress !== undefined) {
-        updates.destinationAddress = sanitizeStringField(tripData.destinationAddress);
+      if (destinationAddress !== undefined) {
+        updates.destinationAddress = destinationAddress;
       }
-      if (tripData.passengers !== undefined) {
-        updates.passengers = sanitizeOptionalNumber(tripData.passengers);
+      if (passengersValue !== undefined) {
+        updates.passengers = passengersValue;
+        updates['A4 Pasengers'] = passengersValue ?? null;
       }
       if (tripData.vehicleSelections !== undefined) {
         updates.vehicleSelections = sanitizeVehicleSelections(tripData.vehicleSelections);
@@ -1277,12 +1406,22 @@ app.patch('/quoteLogs/:logId', optionalAuth, async (req: AuthedReq, res) => {
       if (tripData.status !== undefined) {
         updates.status = sanitizeStringField(tripData.status);
       }
+      if (originProvided) {
+        const originForDisplay = originAddress ?? origin ?? null;
+        updates['A2 origin address'] = originForDisplay;
+      }
+      if (destinationProvided) {
+        const destinationForDisplay = destinationAddress ?? destination ?? null;
+        updates['A3 destination address'] = destinationForDisplay;
+      }
     }
 
     if (quote && typeof quote === 'object') {
       const quoteData = quote as Record<string, unknown>;
       const amount = sanitizeOptionalNumber(quoteData.amount);
-      updates.quote = amount != null ? Math.round(amount) : null;
+      const roundedAmount = amount != null ? Math.round(amount) : null;
+      updates.quote = roundedAmount;
+      updates['A5 quote'] = roundedAmount;
       updates.quoteBreakdown =
         amount != null
           ? {
@@ -1306,7 +1445,11 @@ app.patch('/quoteLogs/:logId', optionalAuth, async (req: AuthedReq, res) => {
     }
 
     if (contact !== undefined) {
-      updates.contact = sanitizeContactPayload(contact);
+      const contactSanitized = sanitizeContactPayload(contact);
+      updates.contact = contactSanitized;
+      updates['A1 Name'] = contactSanitized.name ?? null;
+      updates['A6 email address'] = contactSanitized.email ?? null;
+      updates['A7 phone number'] = contactSanitized.phone ?? null;
     }
 
     if (typeof lastStep === 'number') {
@@ -1315,12 +1458,20 @@ app.patch('/quoteLogs/:logId', optionalAuth, async (req: AuthedReq, res) => {
 
     if (booking && typeof booking === 'object') {
       const bookingData = booking as Record<string, unknown>;
+      const bookingNumber =
+        Object.prototype.hasOwnProperty.call(bookingData, 'bookingNumber') ?
+          sanitizeOptionalNumber(bookingData.bookingNumber) :
+          undefined;
       updates.booking = {
         id: sanitizeStringField(bookingData.id),
         paymentPreference: sanitizeStringField(bookingData.paymentPreference),
         paymentLink: sanitizeStringField(bookingData.paymentLink),
         tipAmount: sanitizeOptionalNumber(bookingData.tipAmount),
+        ...(bookingNumber !== undefined ? { bookingNumber: bookingNumber ?? null } : {}),
       };
+      if (bookingNumber !== undefined) {
+        updates['A0 Booking #'] = bookingNumber ?? null;
+      }
     }
 
     await db.collection('quoteLogs').doc(logId).set(updates, { merge: true });

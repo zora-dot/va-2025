@@ -1,11 +1,26 @@
-import { type ReactNode } from "react"
+import { useState, type FormEvent, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import { GlassPanel } from "@/components/ui/GlassPanel"
 import { ResponsiveImage } from "@/components/ui/ResponsiveImage"
-import { ArrowRight, CalendarClock, CreditCard, MessageSquare, ShieldCheck, Clock3, MapPin, type LucideIcon } from "lucide-react"
+import {
+  ArrowRight,
+  CalendarClock,
+  CreditCard,
+  MessageSquare,
+  ShieldCheck,
+  Clock3,
+  MapPin,
+  PhoneCall,
+  Star,
+  Plane,
+  Users,
+  type LucideIcon,
+} from "lucide-react"
 import { heroServiceCopy } from "@/data/homeHero"
 import { introStatsCopy } from "@/data/homeIntro"
 import { experienceCopy } from "@/data/homeFeatures"
+import { callFunction } from "@/lib/api/client"
+import { PlacesAutocompleteInput, type PlaceSelection } from "@/components/maps/PlacesAutocompleteInput"
 
 
 const adjustWidth = (url: string, width: number) => {
@@ -61,6 +76,29 @@ const highlights = [
   },
 ]
 
+const serviceHighlights = [
+  {
+    title: "Door-to-Door Coverage",
+    description: "Every Fraser Valley, Lower Mainland, and GVRD address—no surge pricing or zones.",
+    icon: MapPin,
+  },
+  {
+    title: "24/7 Dispatch",
+    description: "Live humans confirm every leg, track traffic, and coordinate last-minute changes.",
+    icon: Clock3,
+  },
+  {
+    title: "Major Airport & Ferry Access",
+    description: "Service to YXX, YVR, BLI, and the terminals feeding BC Ferries and cruise ships.",
+    icon: Plane,
+  },
+  {
+    title: "Corporate & Groups",
+    description: "Centralized billing, saved routes, and managed traveler preferences for teams.",
+    icon: Users,
+  },
+]
+
 export const HomePage = () => {
   return (
     <div className="flex flex-col gap-12 pb-8">
@@ -89,7 +127,7 @@ export const HomePage = () => {
           </GlassPanel>
         ))}
       </section>
-     <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
        {highlights.map((item) => (
          <GlassPanel key={item.title} className="p-6">
            <item.icon className="mb-4 h-10 w-10 text-glacier" />
@@ -100,8 +138,8 @@ export const HomePage = () => {
          </GlassPanel>
        ))}
      </section>
-      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <GlassPanel className="flex flex-col gap-4 p-6">
+      <section className="grid gap-6">
+        <GlassPanel className="flex flex-col gap-6 p-6">
           <h3 className="font-heading text-lg uppercase tracking-[0.35em] text-horizon">
             Why Travelers Choose Valley Airporter
           </h3>
@@ -113,48 +151,35 @@ export const HomePage = () => {
             <FeatureCallout icon={ShieldCheck} title="Professional Chauffeurs" description="Trusted team with spotless safety record" />
           </div>
         </GlassPanel>
-        <GlassPanel className="flex flex-col justify-between overflow-hidden p-6">
-          <div className="space-y-4">
-            <h3 className="font-heading text-lg uppercase tracking-[0.35em] text-horizon">
-              15+ Years Serving the Fraser Valley
-            </h3>
-            <p className="text-sm text-midnight/75 whitespace-pre-line leading-relaxed">{experienceCopy}</p>
-          </div>
-          <Link
-            to="/reviews"
-            className="mt-8 inline-flex items-center gap-2 self-start rounded-full border border-horizon/40 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:border-horizon/60 hover:bg-white/90"
-          >
-            Read 150+ Reviews
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </GlassPanel>
       </section>
-      <section className="grid gap-6 md:grid-cols-2">
-        <GlassPanel className="p-6">
-          <h3 className="font-heading text-lg uppercase tracking-[0.45em] text-horizon">
-            Flat Rate Airport Shuttle
-          </h3>
-          <div className="mt-4 space-y-3 text-sm text-midnight/75">
-            <p>• Guaranteed flat rate for any address</p>
-            <p>• Same-day bookings please text or call <a href="tel:+16047516688" className="underline text-horizon">604-751-6688</a></p>
-            <p>
-              • Partnership with Cheam Tours Ltd. (Airport Link Shuttle –
-              <a href="tel:+16045943333" className="underline text-horizon"> 604-594-3333</a>)
-            </p>
-          </div>
-        </GlassPanel>
-        <GlassPanel className="p-6">
-          <h3 className="font-heading text-lg uppercase tracking-[0.45em] text-horizon text-center">
-            Key Service Highlights
-          </h3>
-          <ul className="mt-4 space-y-3 text-sm text-midnight/75 leading-relaxed">
-            <li>Door-to-door service across Fraser Valley, Lower Mainland, and GVRD.</li>
-            <li>24/7/365 availability with professionally trained chauffeurs.</li>
-            <li>Service to YXX, YVR, BLI, and leading ferry/cruise terminals.</li>
-            <li>Corporate accounts, round trips, and large-group bookings welcomed.</li>
-          </ul>
-        </GlassPanel>
-      </section>
+      <GlassPanel className="p-6">
+        <h3 className="font-heading text-lg uppercase tracking-[0.45em] text-horizon">
+          Corporate & Groups
+        </h3>
+        <p className="mt-2 text-sm text-midnight/75">
+          Get centralized invoicing, pre-cleared travelers, and priority dispatch.
+        </p>
+        <CorporateInquiryForm />
+      </GlassPanel>
+      <GlassPanel className="p-6">
+        <h3 className="font-heading text-lg uppercase tracking-[0.45em] text-horizon text-center">
+          Key Service Highlights
+        </h3>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          {serviceHighlights.map((perk) => (
+            <div
+              key={perk.title}
+              className="rounded-2xl border border-horizon/25 bg-white/70 p-4 shadow-sm"
+            >
+              <perk.icon className="h-6 w-6 text-horizon" />
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon">
+                {perk.title}
+              </p>
+              <p className="mt-2 text-sm text-midnight/70 leading-relaxed">{perk.description}</p>
+            </div>
+          ))}
+        </div>
+      </GlassPanel>
     </div>
   )
 }
@@ -195,7 +220,7 @@ const Hero = () => {
             }
           />
         </div>
-        <div className="mt-6 flex flex-col items-center gap-4">
+        <div className="mt-6 flex flex-col items-center gap-4 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
           <Link
             to="/booking"
             className="inline-flex items-center justify-center gap-3 rounded-full border border-emerald-400 bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 px-10 py-5 text-[30px] font-heading font-bold uppercase tracking-[0.28em] text-white shadow-[0_20px_45px_-18px_rgba(16,185,129,0.55)] transition hover:from-emerald-500 hover:via-emerald-600 hover:to-emerald-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-300/50"
@@ -203,6 +228,13 @@ const Hero = () => {
             Start Booking
             <ArrowRight className="h-8 w-8" />
           </Link>
+          <a
+            href="tel:+16047516688"
+            className="inline-flex items-center gap-2 rounded-full border border-horizon/40 bg-white/80 px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:border-horizon/60 hover:bg-white"
+          >
+            Call / Text 24/7
+            <PhoneCall className="h-4 w-4" />
+          </a>
           <Link
             to="/faq"
             className="inline-flex items-center gap-2 rounded-full border border-horizon/30 bg-white/75 px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-horizon transition hover:border-horizon/60 hover:bg-white/90"
@@ -212,25 +244,7 @@ const Hero = () => {
           </Link>
         </div>
       </GlassPanel>
-      <GlassPanel className="grid gap-4 p-6 lg:p-7">
-        <h2 className="font-heading text-base uppercase tracking-[0.35em] text-horizon">
-          Quick Quote (Preview)
-        </h2>
-        <div className="grid gap-4">
-          <QuoteField label="Passengers" value="2 adults + 3 checked bags" />
-          <QuoteField label="From" value="Abbotsford (Any Address)" />
-          <QuoteField label="To" value="Vancouver International Airport (YVR)" />
-          <QuoteField label="Pickup" value="Tue • 07:45 AM" />
-          <QuoteField label="Flight #" value="WS 321 – on time" />
-        </div>
-        <div className="rounded-2xl border border-horizon/20 bg-white/70 p-4">
-          <div className="flex items-center justify-between text-base text-midnight/80">
-            <span>Dynamic Quote</span>
-            <span className="font-semibold text-horizon">$110.00 CAD</span>
-          </div>
-          <p className="mt-2 text-sm text-midnight/60">Sample fare generated from the live booking wizard</p>
-        </div>
-      </GlassPanel>
+      <QuickQuoteEstimator />
     </section>
   )
 }
@@ -269,9 +283,300 @@ const HeroStat = ({
   </div>
 )
 
-const QuoteField = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-2xl border border-horizon/25 bg-white/70 px-4 py-3">
-    <p className="text-[0.7rem] uppercase tracking-[0.3em] text-midnight/50">{label}</p>
-    <p className="mt-1 text-sm text-midnight/80">{value}</p>
-  </div>
-)
+const QuickQuoteEstimator = () => {
+  const [form, setForm] = useState({
+    pickup: "",
+    dropoff: "",
+    passengers: "2",
+  })
+  const [pickupPlace, setPickupPlace] = useState<PlaceSelection | null>(null)
+  const [dropoffPlace, setDropoffPlace] = useState<PlaceSelection | null>(null)
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [estimate, setEstimate] = useState<{
+    amount: number
+    currency: string
+    distanceKm: number
+    durationMinutes: number
+    passengers: number
+  } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState({ pickup: false, dropoff: false })
+
+  const normalizedPassengers = (() => {
+    const parsed = Number(form.passengers)
+    if (!Number.isFinite(parsed)) return 1
+    return Math.max(1, Math.min(14, Math.round(parsed)))
+  })()
+
+  const inputClasses = (hasError: boolean) =>
+    `h-12 rounded-2xl border ${hasError ? "border-rose-400 focus:border-rose-500" : "border-horizon/25 focus:border-horizon"} bg-white/80 px-4 text-sm text-midnight focus:outline-none focus:ring-2 ${hasError ? "focus:ring-rose-200" : "focus:ring-horizon/30"}`
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const missingPickup = !pickupPlace
+    const missingDropoff = !dropoffPlace
+    if (missingPickup || missingDropoff) {
+      setFieldErrors({ pickup: missingPickup, dropoff: missingDropoff })
+      setError("Choose both pickup and dropoff from the suggestions.")
+      setStatus("idle")
+      return
+    }
+    try {
+      setStatus("loading")
+      setError(null)
+      const response = await callFunction<{
+        estimate: { amount: number; currency: string }
+        distanceKm: number
+        durationMinutes: number
+        passengers: number
+      }>("quickQuote", {
+        method: "POST",
+        body: {
+          pickupAddress: form.pickup.trim(),
+          pickupPlaceId: pickupPlace?.placeId,
+          pickupLatLng: pickupPlace?.location ?? undefined,
+          dropoffAddress: form.dropoff.trim(),
+          dropoffPlaceId: dropoffPlace?.placeId,
+          dropoffLatLng: dropoffPlace?.location ?? undefined,
+          passengers: normalizedPassengers,
+        },
+      })
+      setEstimate({
+        amount: response.estimate.amount,
+        currency: response.estimate.currency,
+        distanceKm: response.distanceKm,
+        durationMinutes: response.durationMinutes,
+        passengers: response.passengers,
+      })
+      setFieldErrors({ pickup: false, dropoff: false })
+      setStatus("success")
+    } catch (err) {
+      console.error(err)
+      setStatus("error")
+      setEstimate(null)
+      setError(
+        err instanceof Error ? err.message : "We can't calculate that route right now. Please try again.",
+      )
+    }
+  }
+
+  return (
+    <GlassPanel className="flex w-full flex-col gap-4 p-6 lg:p-7">
+      <div className="space-y-2 pb-2">
+        <h2 className="font-heading text-lg uppercase tracking-[0.35em] text-horizon">
+          Quick Quote
+        </h2>
+      </div>
+      <form className="grid gap-4 lg:grid-cols-2 lg:gap-5" onSubmit={handleSubmit}>
+        <div className="grid gap-2">
+          <label className="text-[0.85rem] uppercase tracking-[0.35em] text-midnight/70">
+            Pickup address
+          </label>
+          <PlacesAutocompleteInput
+            value={form.pickup}
+            onChange={(value) => {
+              setForm((prev) => ({ ...prev, pickup: value }))
+              setPickupPlace(null)
+              setFieldErrors((prev) => ({ ...prev, pickup: false }))
+            }}
+            onPlaceSelect={(selection) => {
+              setForm((prev) => ({ ...prev, pickup: selection.address }))
+              setPickupPlace(selection)
+              setFieldErrors((prev) => ({ ...prev, pickup: false }))
+            }}
+            onPlaceCleared={() => {
+              setPickupPlace(null)
+            }}
+            placeholder="e.g. 1234 McCallum Rd, Abbotsford"
+            wrapperClassName="space-y-0"
+            inputClassName={inputClasses(fieldErrors.pickup)}
+          />
+          {fieldErrors.pickup ? (
+            <p className="text-xs text-rose-600">Select a pickup option from the suggestions.</p>
+          ) : null}
+        </div>
+        <div className="grid gap-2">
+          <label className="text-[0.85rem] uppercase tracking-[0.35em] text-midnight/70">
+            Dropoff address
+          </label>
+          <PlacesAutocompleteInput
+            value={form.dropoff}
+            onChange={(value) => {
+              setForm((prev) => ({ ...prev, dropoff: value }))
+              setDropoffPlace(null)
+              setFieldErrors((prev) => ({ ...prev, dropoff: false }))
+            }}
+            onPlaceSelect={(selection) => {
+              setForm((prev) => ({ ...prev, dropoff: selection.address }))
+              setDropoffPlace(selection)
+              setFieldErrors((prev) => ({ ...prev, dropoff: false }))
+            }}
+            onPlaceCleared={() => {
+              setDropoffPlace(null)
+            }}
+            placeholder="e.g. Vancouver International Airport"
+            wrapperClassName="space-y-0"
+            inputClassName={inputClasses(fieldErrors.dropoff)}
+          />
+          {fieldErrors.dropoff ? (
+            <p className="text-xs text-rose-600">Select a dropoff option from the suggestions.</p>
+          ) : null}
+        </div>
+        <div className="grid gap-2 max-w-xs">
+          <label className="text-[0.85rem] uppercase tracking-[0.35em] text-midnight/70">
+            Passengers
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={14}
+            value={form.passengers}
+            onChange={(event) => setForm((prev) => ({ ...prev, passengers: event.target.value }))}
+            className="h-12 rounded-2xl border border-horizon/25 bg-white/80 px-4 text-sm text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+          />
+        </div>
+        <div className="flex items-end pt-2 lg:col-span-2">
+          <button
+            type="submit"
+            disabled={status === "loading" || !pickupPlace || !dropoffPlace}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-horizon/40 bg-horizon px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-white transition hover:bg-horizon/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {status === "loading" ? "Calculating..." : "Get Estimate"}
+            <ArrowRight className="h-4 w-4 align-middle" />
+          </button>
+        </div>
+      </form>
+      <div className="mt-2 rounded-2xl border border-horizon/20 bg-white/70 p-4">
+        <div className="flex items-center justify-between text-base text-midnight/80">
+          <span>Estimate</span>
+          <span className="font-semibold text-horizon">
+            {estimate ? `$${estimate.amount.toFixed(0)} CAD` : "—"}
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-midnight/60">
+          {estimate
+            ? `Approx. ${estimate.distanceKm.toFixed(1)} km • ${estimate.durationMinutes} min • ${estimate.passengers} pax`
+            : "Distance-based fare preview. Final rate confirmed during booking."}
+        </p>
+      </div>
+      {error ? <p className="text-sm text-ember">{error}</p> : null}
+    </GlassPanel>
+  )
+}
+
+const CorporateInquiryForm = () => {
+  const [values, setValues] = useState({
+    company: "",
+    contact: "",
+    email: "",
+    phone: "",
+    trips: "",
+  })
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!values.company || !values.contact || !values.email || !values.phone) {
+      setError("Please complete the required fields.")
+      return
+    }
+    try {
+      setStatus("loading")
+      setError(null)
+      await callFunction<{ ok: boolean }>("submitContactMessage", {
+        method: "POST",
+        body: {
+          fullName: values.contact,
+          email: values.email,
+          phone: values.phone,
+          subject: `Corporate Program Inquiry – ${values.company}`,
+          message: `Company: ${values.company}\nContact: ${values.contact}\nEstimated trips per month: ${values.trips || "Not provided"}`,
+        },
+      })
+      setValues({
+        company: "",
+        contact: "",
+        email: "",
+        phone: "",
+        trips: "",
+      })
+      setStatus("success")
+    } catch (err) {
+      console.error(err)
+      setStatus("error")
+      setError(err instanceof Error ? err.message : "We could not send your request. Please try again.")
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 grid gap-3 text-sm">
+      <div className="grid gap-2">
+          <label className="text-[0.85rem] uppercase tracking-[0.35em] text-midnight/70">Company</label>
+        <input
+          required
+          type="text"
+          value={values.company}
+          onChange={(event) => setValues((prev) => ({ ...prev, company: event.target.value }))}
+          className="h-12 rounded-2xl border border-horizon/25 bg-white/80 px-4 text-sm text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <label className="text-[0.85rem] uppercase tracking-[0.35em] text-midnight/70">Contact</label>
+          <input
+            required
+            type="text"
+            value={values.contact}
+            onChange={(event) => setValues((prev) => ({ ...prev, contact: event.target.value }))}
+            className="h-12 rounded-2xl border border-horizon/25 bg-white/80 px-4 text-sm text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+          />
+        </div>
+        <div className="grid gap-2">
+          <label className="text-[0.85rem] uppercase tracking-[0.35em] text-midnight/70">Phone</label>
+          <input
+            required
+            type="tel"
+            value={values.phone}
+            onChange={(event) => setValues((prev) => ({ ...prev, phone: event.target.value }))}
+            className="h-12 rounded-2xl border border-horizon/25 bg-white/80 px-4 text-sm text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <label className="text-[0.85rem] uppercase tracking-[0.35em] text-midnight/70">Email</label>
+          <input
+            required
+            type="email"
+            value={values.email}
+            onChange={(event) => setValues((prev) => ({ ...prev, email: event.target.value }))}
+            className="h-12 rounded-2xl border border-horizon/25 bg-white/80 px-4 text-sm text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+          />
+        </div>
+        <div className="grid gap-2">
+          <label className="text-[0.85rem] uppercase tracking-[0.35em] text-midnight/70">Trips / Month</label>
+          <input
+            type="text"
+            value={values.trips}
+            onChange={(event) => setValues((prev) => ({ ...prev, trips: event.target.value }))}
+            placeholder="e.g. 6-10"
+            className="h-12 rounded-2xl border border-horizon/25 bg-white/80 px-4 text-sm text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
+          />
+        </div>
+      </div>
+      <button
+        type="submit"
+        disabled={status === "loading"}
+        className="mt-2 inline-flex items-center justify-center gap-2 rounded-full border border-horizon/40 bg-horizon px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-white transition hover:bg-horizon/90 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {status === "loading" ? "Sending..." : "Submit"}
+        <ArrowRight className="h-4 w-4" />
+      </button>
+      {error ? <p className="text-xs text-ember">{error}</p> : null}
+      {status === "success" ? (
+        <p className="text-xs text-aurora">Thank you! Dispatch will confirm your program shortly.</p>
+      ) : null}
+    </form>
+  )
+}

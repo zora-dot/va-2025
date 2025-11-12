@@ -17,7 +17,7 @@ import {
   getOriginsForDirection,
   getAvailableDirections,
 } from "@/features/booking/pricing"
-import type { TripDirection, PricingResult } from "@/features/booking/pricing"
+import type { TripDirection, PricingResult, PricingQuoteResult } from "@/features/booking/pricing"
 import { addHours, differenceInMinutes, format } from "date-fns"
 import { clsx } from "clsx"
 import { useFirebaseServices } from "@/app/providers/FirebaseContext"
@@ -35,6 +35,7 @@ const additionalTerminals = [
   "Vancouver International Airport (YVR)",
   "Bellingham International Airport (BLI)",
 ]
+const TEST_LOCATION_LABEL = "OT"
 
 type LocationOptionGroup = {
   label: string
@@ -46,6 +47,7 @@ const MIN_ADVANCE_HOURS = 10
 const SOFT_NOTICE_HOURS = 24
 const MIN_ADVANCE_MINUTES = MIN_ADVANCE_HOURS * 60
 const ADDITIONAL_PASSENGER_FEE = 10
+const FALLBACK_PRICE_CAP = 300
 const PASSENGER_LIMIT_MESSAGE =
   "If you would like more than 14 passengers, please call or email us instead for a group quote."
 
@@ -307,7 +309,7 @@ const tripSchema = z.object({
   passengerCount: z
     .coerce
     .number()
-    .min(1)
+    .min(1, "Select passenger count")
     .max(PASSENGER_MAX, {
       message: PASSENGER_LIMIT_MESSAGE,
     }),
@@ -375,6 +377,10 @@ export const BookingWizard = () => {
   const stepHeaderRef = useRef<HTMLDivElement | null>(null)
   const { enabled: firebaseEnabled } = useFirebaseServices()
   const navigate = useNavigate()
+  const [tripDistanceEstimate, setTripDistanceEstimate] = useState<{
+    distanceKm: number
+    durationMinutes: number
+  } | null>(null)
 
   const tripResolver = zodResolver(tripSchema) as Resolver<TripForm>
   const scheduleResolver = zodResolver(scheduleSchema) as Resolver<ScheduleForm>
@@ -431,7 +437,7 @@ export const BookingWizard = () => {
       direction: directionOptions[0],
       origin: "",
       destination: "",
-      passengerCount: 1,
+      passengerCount: 0,
       vehicleSelections: [vehicleOptions[0].id],
       originAddress: "",
       destinationAddress: "",
@@ -514,18 +520,23 @@ export const BookingWizard = () => {
     }
   }, [tripData])
 
-  const fallbackPricing = useMemo(() => {
-    if (!tripData) return null
+  const fallbackPricingResult = useMemo<{
+    pricing: PricingResult | null
+    suppressed: boolean
+  }>(() => {
+    if (!tripData) {
+      return { pricing: null, suppressed: false }
+    }
     const preferred =
       tripData.vehicleSelections.some((selection) => vehiclePreferenceMap[selection] === "van") ?
         "van" :
         "standard"
 
     if (!baseDirections.includes(tripData.direction as TripDirection)) {
-      return null
+      return { pricing: null, suppressed: false }
     }
 
-    return calculatePricing({
+    const result = calculatePricing({
       direction: tripData.direction as TripDirection,
       origin: tripData.origin,
       destination: tripData.destination,
@@ -533,43 +544,76 @@ export const BookingWizard = () => {
       preferredVehicle: preferred,
       preferredRateKey: tripData.preferredRateKey ?? null,
     })
+    const suppressed = Boolean(result?.baseRate != null && result.baseRate > FALLBACK_PRICE_CAP)
+    return {
+      pricing: suppressed ? null : result,
+      suppressed,
+    }
   }, [tripData])
 
+  const fallbackPricing = fallbackPricingResult.pricing
   const pricing = remotePricing ?? (quoteLoading ? null : fallbackPricing)
+  const fallbackSuppressed =
+    fallbackPricingResult.suppressed && !remotePricing && !quoteLoading
 
   const estimatedQuote = useMemo(() => {
     if (!tripData || !pricing || pricing.baseRate == null) {
       return null
     }
-    const baseRate = pricing.baseRate
+    const breakdown = (pricing as PricingQuoteResult | null)?.breakdown ?? null
+    const distanceRuleActive = Boolean(
+      (pricing as PricingQuoteResult | null)?.distanceRuleApplied &&
+        (pricing as PricingQuoteResult | null)?.distanceRule
+    )
     const resolvedRateKey = tripData.preferredRateKey ?? pricing.vehicleKey ?? null
     const resolvedRateValue =
-      resolvedRateKey && pricing.ratesTable && typeof pricing.ratesTable[resolvedRateKey] === "number"
-        ? Math.round(pricing.ratesTable[resolvedRateKey]!)
-        : null
+      !distanceRuleActive &&
+      resolvedRateKey &&
+      pricing.ratesTable &&
+      typeof pricing.ratesTable[resolvedRateKey] === "number" ?
+        Math.round(pricing.ratesTable[resolvedRateKey]!) :
+        null
     const fallbackRateValue = (() => {
       if (!pricing.ratesTable) return null
       const passengerKey = tripData.passengerCount.toString()
-      if (typeof pricing.ratesTable[passengerKey] === "number") {
-        return Math.round(pricing.ratesTable[passengerKey]!)
-      }
-      if (typeof pricing.ratesTable["1"] === "number") {
-        return Math.round(pricing.ratesTable["1"]!)
+      if (!distanceRuleActive) {
+        if (typeof pricing.ratesTable[passengerKey] === "number") {
+          return Math.round(pricing.ratesTable[passengerKey]!)
+        }
+        if (typeof pricing.ratesTable["1"] === "number") {
+          return Math.round(pricing.ratesTable["1"]!)
+        }
       }
       return null
     })()
-    const baseFare = Math.max(0, resolvedRateValue ?? fallbackRateValue ?? baseRate ?? 0)
+    const resolvedTotalRate = Math.max(0, resolvedRateValue ?? fallbackRateValue ?? pricing.baseRate ?? 0)
+    const roundedBaseRate = Math.round(resolvedTotalRate)
     const usesFlatRateSelection = Boolean(tripData.preferredRateKey)
     const chargeablePassengerCount = usesFlatRateSelection ? 1 : Math.min(6, tripData.passengerCount)
     const extraPassengers = Math.max(0, chargeablePassengerCount - 1)
     const perPassengerFee = getExtraPassengerFee(tripData.origin, tripData.destination)
-    const extraPassengerTotal = extraPassengers * perPassengerFee
-    const roundedBaseRate = Math.round(baseRate)
+    const breakdownPassengerCharge =
+      breakdown?.additionalPassengerCharge != null ? Math.round(breakdown.additionalPassengerCharge) : null
+    const extraPassengerTotal = breakdownPassengerCharge ?? Math.round(extraPassengers * perPassengerFee)
+    const ratesTableBaseFare =
+      !usesFlatRateSelection && pricing.ratesTable && typeof pricing.ratesTable["1"] === "number" ?
+        Math.round(pricing.ratesTable["1"]!) :
+        null
+    const baseFareFromBreakdown =
+      breakdown?.baseFare != null ? Math.round(breakdown.baseFare) : null
+    const fallbackBaseFare =
+      !usesFlatRateSelection ?
+        Math.max(0, Math.round(resolvedTotalRate - extraPassengerTotal)) :
+        null
+    const baseFare = baseFareFromBreakdown ?? ratesTableBaseFare ?? fallbackBaseFare ?? Math.round(resolvedTotalRate)
     const usesDistanceFare = shouldShowDistanceFare(tripData.origin, tripData.destination)
     const additionalCharges = Math.max(0, roundedBaseRate - baseFare - extraPassengerTotal)
-    const distanceFare = usesDistanceFare ? Math.max(0, roundToCents(additionalCharges)) : 0
+    const distanceFareFromBreakdown =
+      breakdown?.distanceCharge != null ? Math.round(breakdown.distanceCharge) : null
+    const distanceFare =
+      distanceFareFromBreakdown ?? (usesDistanceFare ? Math.max(0, Math.round(additionalCharges)) : 0)
     const largeVehicleSelected = hasLargeVehicleSelection(tripData.vehicleSelections)
-    const vehiclePremium = largeVehicleSelected ? Math.max(0, roundToCents(additionalCharges - distanceFare)) : 0
+    const vehiclePremium = largeVehicleSelected ? Math.max(0, Math.round(additionalCharges - distanceFare)) : 0
     const estimatedGst = Math.round(roundedBaseRate * 0.05 * 100) / 100
     return {
       baseRate: roundedBaseRate,
@@ -787,17 +831,23 @@ export const BookingWizard = () => {
             paymentPreference,
             paymentLink: paymentUrl,
             tipAmount: safeTip,
+            bookingNumber: response.bookingNumber ?? null,
           },
         })
 
         const totalCents = response.totals?.totalCents ?? null
+        const gstCents = response.totals?.gstCents ?? null
+        const displayCents =
+          totalCents != null ?
+            Math.max(0, totalCents - (gstCents ?? 0)) :
+            null
         navigateState = {
           paymentLink: paymentUrl ?? undefined,
           paymentPreference,
           bookingId: response.id ?? undefined,
           bookingNumber: response.bookingNumber ?? undefined,
-          ...(totalCents != null ?
-            { total: totalCents / 100 } :
+          ...(displayCents != null ?
+            { total: displayCents / 100 } :
             estimatedTotalForState != null ? { total: estimatedTotalForState } : {}),
         }
       }
@@ -876,12 +926,20 @@ export const BookingWizard = () => {
     [],
   )
 
+  const handlePaymentPreferenceChange = useCallback(
+    (value: "pay_on_arrival" | "pay_now") => {
+      setPaymentSelectionError(null)
+      setPaymentPreference(value)
+    },
+    [],
+  )
+
   const resetWizard = useCallback(() => {
     tripForm.reset({
       direction: directionOptions[0],
       origin: "",
       destination: "",
-      passengerCount: 1,
+      passengerCount: 0,
       vehicleSelections: [determineVehicleOption(1)],
       originAddress: "",
       destinationAddress: "",
@@ -903,6 +961,7 @@ export const BookingWizard = () => {
     setRemotePricing(null)
     setQuoteError(null)
     setQuoteLoading(false)
+    setTripDistanceEstimate(null)
     goToStep(0, { reset: true, scroll: true })
   }, [goToStep, passengerForm, scheduleForm, tripForm])
 
@@ -924,8 +983,55 @@ export const BookingWizard = () => {
       })
     })
     additionalTerminals.forEach(addOption)
+    addOption(TEST_LOCATION_LABEL)
     return list
   }, [])
+
+  useEffect(() => {
+    if (!tripData) {
+      setTripDistanceEstimate(null)
+      return
+    }
+    const originForDistance = (tripData.originAddress ?? tripData.origin)?.trim()
+    const destinationForDistance = (tripData.destinationAddress ?? tripData.destination)?.trim()
+    if (!originForDistance || !destinationForDistance) {
+      setTripDistanceEstimate(null)
+      return
+    }
+    let cancelled = false
+    const fetchDistance = async () => {
+      try {
+        const result = await apiFetch<{ distanceKm: number; durationMinutes: number }>("/distance", {
+          method: "POST",
+          body: {
+            origin: originForDistance,
+            destination: destinationForDistance,
+          },
+          skipAuth: true,
+        })
+        if (!cancelled && result?.distanceKm && result?.durationMinutes) {
+          setTripDistanceEstimate({
+            distanceKm: result.distanceKm,
+            durationMinutes: result.durationMinutes,
+          })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to fetch trip distance", error)
+          setTripDistanceEstimate(null)
+        }
+      }
+    }
+    fetchDistance()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    tripData?.origin,
+    tripData?.originAddress,
+    tripData?.destination,
+    tripData?.destinationAddress,
+  ])
 
   const originOptions = useMemo(() => [...locationOptions], [locationOptions])
   const destinationOptions = useMemo(() => [...locationOptions], [locationOptions])
@@ -1023,8 +1129,10 @@ export const BookingWizard = () => {
       {step === 1 && tripData ? (
         <PriceQuoteStep
           trip={tripData}
+          distanceEstimate={tripDistanceEstimate}
           pricing={pricing}
           quote={estimatedQuote}
+          fallbackSuppressed={fallbackSuppressed}
           loading={quoteLoading}
           error={quoteError}
           onEditTrip={() => goToStep(0, { scroll: true })}
@@ -1132,9 +1240,11 @@ const TripStep = ({
   const { register, formState, watch, setValue, control } = form
   const selectedOrigin = (watch("origin") ?? "").trim()
   const selectedDestination = (watch("destination") ?? "").trim()
-  const passengerCount = watch("passengerCount") ?? 1
+  const passengerCount = watch("passengerCount")
+  const passengerCountNumber = Number(passengerCount)
+  const hasValidPassengerCount = Number.isFinite(passengerCountNumber) && passengerCountNumber >= 1
   const selectedVehicles = watch("vehicleSelections") ?? []
-  const passengerLimitExceeded = Number(passengerCount) > PASSENGER_MAX
+  const passengerLimitExceeded = hasValidPassengerCount && passengerCountNumber > PASSENGER_MAX
 
   const originGroups = useMemo(() => buildLocationGroups(originOptions), [originOptions])
   const destinationGroups = useMemo(() => buildLocationGroups(destinationOptions), [destinationOptions])
@@ -1215,8 +1325,7 @@ const TripStep = ({
   }, [passengerCount, selectedVehicles, setValue])
 
   useEffect(() => {
-    if (!Number.isFinite(Number(passengerCount))) {
-      form.clearErrors("passengerCount")
+    if (!hasValidPassengerCount) {
       return
     }
     if (passengerLimitExceeded) {
@@ -1224,21 +1333,22 @@ const TripStep = ({
     } else if (formState.errors.passengerCount?.message === PASSENGER_LIMIT_MESSAGE) {
       form.clearErrors("passengerCount")
     }
-  }, [form, formState.errors.passengerCount, passengerCount, passengerLimitExceeded])
+  }, [form, formState.errors.passengerCount, hasValidPassengerCount, passengerLimitExceeded])
 
   const pickupReady = Boolean(selectedOrigin)
   const dropoffReady = Boolean(selectedDestination)
   const showDropoff = pickupAcknowledged && pickupReady
   const showPassengerCount = dropoffAcknowledged && dropoffReady
 
-  const autoPassengerCount = Math.max(1, Number(passengerCount) || 1)
+  const normalizedPassengerCount = hasValidPassengerCount ? passengerCountNumber : 1
+  const autoPassengerCount = Math.max(1, normalizedPassengerCount)
   const autoVehicle = selectedVehicles[0] ?? determineVehicleOption(autoPassengerCount)
   const autoVehicleLabel = vehicleLabelMap[autoVehicle] ?? "Auto-assigned vehicle"
-  const selectedPassengerOption = useMemo(
-    () => resolvePassengerOption(autoPassengerCount, autoVehicle),
-    [autoPassengerCount, autoVehicle],
-  )
-  const selectedPassengerOptionId = selectedPassengerOption?.id ?? ""
+  const selectedPassengerOption = useMemo(() => {
+    if (!hasValidPassengerCount) return null
+    return resolvePassengerOption(autoPassengerCount, autoVehicle)
+  }, [autoPassengerCount, autoVehicle, hasValidPassengerCount])
+  const selectedPassengerOptionId = hasValidPassengerCount ? selectedPassengerOption?.id ?? "" : ""
 
   const handlePassengerOptionSelect = useCallback(
     (option: PassengerOption) => {
@@ -1247,14 +1357,6 @@ const TripStep = ({
       setValue("vehicleSelections", [vehicle], { shouldValidate: true, shouldDirty: true })
     },
     [setValue],
-  )
-
-  const handlePaymentPreferenceChange = useCallback(
-    (value: "pay_on_arrival" | "pay_now") => {
-      setPaymentSelectionError(null)
-      setPaymentPreference(value)
-    },
-    [],
   )
 
   return (
@@ -1297,7 +1399,6 @@ const TripStep = ({
                 <PlacesAutocompleteInput
                   {...field}
                   placeholder="Full street address with unit number"
-                  helperText="Search powered by Google Places."
                   onChange={(value) => field.onChange(value)}
                   onPlaceSelect={(selection) => field.onChange(selection.address)}
                   onPlaceCleared={() => field.onChange("")}
@@ -1342,14 +1443,13 @@ const TripStep = ({
                   control={control}
                   name="destinationAddress"
                   render={({ field }) => (
-                    <PlacesAutocompleteInput
-                      {...field}
-                      placeholder="Full street address with unit number"
-                      helperText="Search powered by Google Places."
-                      onChange={(value) => field.onChange(value)}
-                      onPlaceSelect={(selection) => field.onChange(selection.address)}
-                      onPlaceCleared={() => field.onChange("")}
-                    />
+                      <PlacesAutocompleteInput
+                        {...field}
+                        placeholder="Full street address with unit number"
+                        onChange={(value) => field.onChange(value)}
+                        onPlaceSelect={(selection) => field.onChange(selection.address)}
+                        onPlaceCleared={() => field.onChange("")}
+                      />
                   )}
                 />
               </Field>
@@ -1366,7 +1466,7 @@ const TripStep = ({
               </p>
               <select
                 className="mt-3 h-12 w-full rounded-2xl border border-horizon/30 bg-white/85 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
-                value={selectedPassengerOptionId || ""}
+                value={selectedPassengerOptionId}
                 onChange={(event) => {
                   const option = passengerOptions.find((candidate) => candidate.id === event.target.value)
                   if (option) {
@@ -1375,7 +1475,7 @@ const TripStep = ({
                 }}
               >
                 <option value="" disabled hidden>
-                  Select passengers
+                  Select an option
                 </option>
                 {passengerOptions.map((option) => (
                   <option key={option.id} value={option.id}>
@@ -1392,7 +1492,7 @@ const TripStep = ({
           </Field>
         ) : null}
 
-        {showPassengerCount ? (
+        {showPassengerCount && hasValidPassengerCount ? (
           <Field
             label="Vehicle Fleet"
             helper={`Auto-selected: ${autoVehicleLabel}. Adjust the passenger count if you need a different vehicle size.`}
@@ -1456,7 +1556,7 @@ const TripStep = ({
                 direction: directionOptions[0],
                 origin: "",
                 destination: "",
-                passengerCount: 1,
+                passengerCount: 0,
                 originAddress: "",
                 destinationAddress: "",
                 vehicleSelections: [determineVehicleOption(1)],
@@ -1496,18 +1596,19 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value)
 
-const roundToCents = (value: number) => Math.round(value * 100) / 100
-
 const PriceQuoteStep = ({
   trip,
+  distanceEstimate,
   pricing,
   quote,
+  fallbackSuppressed,
   onEditTrip,
   onContinue,
   loading,
   error,
 }: {
   trip: TripData
+  distanceEstimate?: { distanceKm: number; durationMinutes: number } | null
   pricing: PricingResult | null
   quote: {
     baseRate: number
@@ -1521,12 +1622,14 @@ const PriceQuoteStep = ({
   } | null
   onEditTrip: () => void
   onContinue: () => void
+  fallbackSuppressed?: boolean
   loading?: boolean
   error?: string | null
 }) => {
   const [animationComplete, setAnimationComplete] = useState(false)
   const waitingForQuote = Boolean(loading && (!pricing || !quote))
   const quoteAvailable = Boolean(!waitingForQuote && quote && pricing?.baseRate != null)
+  const fallbackBlocked = Boolean(fallbackSuppressed)
   const passengerLabel =
     trip.passengerCount === 1 ? "1 passenger" : `${trip.passengerCount} passengers`
   const selectedVehicles = useMemo(
@@ -1537,6 +1640,8 @@ const PriceQuoteStep = ({
     () => trip.vehicleSelections.join("|"),
     [trip.vehicleSelections],
   )
+  const originAddress = trip.originAddress?.trim() ? trip.originAddress.trim() : null
+  const destinationAddress = trip.destinationAddress?.trim() ? trip.destinationAddress.trim() : null
   const instantQuote =
     quoteAvailable ?
       quote?.baseRate ?? pricing?.baseRate ?? null :
@@ -1547,11 +1652,17 @@ const PriceQuoteStep = ({
 
   const surgeGuess = trip.direction === "From the Airport" ? 1.1 : 1
   const discountGuess = trip.passengerCount >= 4 ? 5 : 0
+  const resolvedDistanceKm =
+    distanceEstimate?.distanceKm ??
+    Math.max(10, trip.passengerCount * 8)
+  const resolvedDriveMinutes =
+    distanceEstimate?.durationMinutes ??
+    Math.max(20, trip.passengerCount * 4)
 
   const runAnimatedQuote = useCallback(async () => {
     const payload = {
-      distanceKm: Math.max(10, trip.passengerCount * 8), // TODO: inject route distance from Step 1
-      timeMin: Math.max(20, trip.passengerCount * 4), // TODO: inject drive time from Step 1
+      distanceKm: resolvedDistanceKm,
+      timeMin: resolvedDriveMinutes,
       surge: surgeGuess,
       discountPct: discountGuess,
     }
@@ -1574,7 +1685,7 @@ const PriceQuoteStep = ({
         currency: "CAD",
       }
     }
-  }, [discountGuess, roundedInstantQuote, surgeGuess, trip.passengerCount])
+  }, [discountGuess, roundedInstantQuote, surgeGuess, resolvedDistanceKm, resolvedDriveMinutes])
 
   const handleComplete = useCallback(() => {
     setAnimationComplete(true)
@@ -1668,6 +1779,21 @@ const PriceQuoteStep = ({
                     </button>
                   ) : null}
                 </div>
+              ) : fallbackBlocked ? (
+                <div className="mt-3 space-y-2 text-base text-midnight/70">
+                  <p>We do not currently have pricing for this selection online, contact us via phone/email instead.</p>
+                  <p>
+                    Call{" "}
+                    <a className="font-semibold text-horizon underline" href="tel:+16047516688">
+                      (604) 751-6688
+                    </a>{" "}
+                    or email{" "}
+                    <a className="font-semibold text-horizon underline" href="mailto:info@valleyairporter.ca">
+                      info@valleyairporter.ca
+                    </a>
+                    .
+                  </p>
+                </div>
               ) : (
                 <div className="mt-3 space-y-2 text-base text-midnight/70">
                   <p>We couldn’t calculate an instant fare for this route.</p>
@@ -1694,10 +1820,18 @@ const PriceQuoteStep = ({
                   <span className="font-semibold">Passengers •</span> {passengerLabel}
                 </li>
                 <li>
-                  <span className="font-semibold">From •</span> {trip.origin}
+                  <span className="font-semibold">From •</span>{" "}
+                  <span>{trip.origin}</span>
+                  {originAddress ? (
+                    <span className="block text-xs text-midnight/60">{originAddress}</span>
+                  ) : null}
                 </li>
                 <li>
-                  <span className="font-semibold">To •</span> {trip.destination}
+                  <span className="font-semibold">To •</span>{" "}
+                  <span>{trip.destination}</span>
+                  {destinationAddress ? (
+                    <span className="block text-xs text-midnight/60">{destinationAddress}</span>
+                  ) : null}
                 </li>
                 <li>
                   <span className="font-semibold">Vehicle type •</span> {selectedVehicles}
@@ -1818,6 +1952,7 @@ const ScheduleStep = ({
         <Field
           label={direction === "From the Airport" ? "Departure Flight Number" : "Arrival Flight Number"}
           helper="(If arriving at an airport only)"
+          helperPosition="before"
         >
           <input
             type="text"
@@ -1884,7 +2019,7 @@ const PassengerStep = ({
             className="h-12 w-full rounded-2xl border border-horizon/30 bg-white/80 px-4 text-base text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
           />
         </Field>
-        <Field label="Phone" error={formState.errors.phone?.message}>
+        <Field label="Mobile Phone Number" error={formState.errors.phone?.message}>
           <input
             type="tel"
             {...register("phone")}
@@ -1976,10 +2111,14 @@ const ReviewStep = ({
   const largeVehicleSelected = hasLargeVehicleSelection(trip.vehicleSelections)
   const fallbackVehiclePremium =
     largeVehicleSelected && groupTotal != null && baseFare != null ?
-      Math.max(0, roundToCents(groupTotal - baseFare - extraPassengerTotal - distanceFare)) :
+      Math.max(0, Math.round(groupTotal - baseFare - extraPassengerTotal - distanceFare)) :
       0
   const vehiclePremium = quote?.vehiclePremium ?? fallbackVehiclePremium
   const safeTip = Number.isFinite(tipAmount) ? Math.max(0, tipAmount) : 0
+  const [tipInputValue, setTipInputValue] = useState(safeTip > 0 ? String(safeTip) : "")
+  useEffect(() => {
+    setTipInputValue((Number.isFinite(tipAmount) && tipAmount > 0 ? String(Math.max(0, tipAmount)) : ""))
+  }, [tipAmount])
   const finalTotal = groupTotal != null ? groupTotal + safeTip : null
   const roundedFinalTotal = finalTotal != null ? Math.round(finalTotal) : null
   const confirmLabel =
@@ -1996,7 +2135,9 @@ const ReviewStep = ({
   const formattedNotes = notes && notes.length > 0 ? notes : "None"
 
   const handleTipInputChange: ChangeEventHandler<HTMLInputElement> = (event) => {
-    const parsed = Number.parseFloat(event.target.value)
+    const raw = event.target.value.replace(/[^0-9.]/g, "")
+    setTipInputValue(raw)
+    const parsed = Number.parseFloat(raw)
     onTipChange(Number.isNaN(parsed) ? 0 : Math.max(0, parsed))
   }
 
@@ -2114,10 +2255,12 @@ const ReviewStep = ({
                 <div className="flex items-center gap-2">
                   <input
                     id="tip-amount"
-                    type="number"
+                    type="text"
                     min={0}
                     step={1}
-                    value={safeTip}
+                    value={tipInputValue}
+                    inputMode="decimal"
+                    placeholder="0"
                     onChange={handleTipInputChange}
                     className="h-10 w-24 rounded-full border border-horizon/30 bg-white px-3 text-right text-sm text-midnight focus:border-horizon focus:outline-none focus:ring-2 focus:ring-horizon/30"
                   />
@@ -2125,7 +2268,7 @@ const ReviewStep = ({
                 </div>
               </div>
               <div className="flex items-center justify-between border-t border-horizon/20 pt-3 font-semibold text-midnight">
-                <span>Final Total</span>
+                <span>Total</span>
                 <span>{finalTotalLabel}</span>
               </div>
             </div>
@@ -2171,7 +2314,7 @@ const ReviewStep = ({
               checkout link.
             </p>
             {paymentSelectionError ? (
-              <p className="text-xs font-semibold text-ember">
+              <p className="text-xs font-semibold text-rose-600">
                 {paymentSelectionError}
               </p>
             ) : null}
@@ -2208,6 +2351,12 @@ const ReviewStep = ({
         </button>
       </div>
 
+      {paymentSelectionError ? (
+        <p className="mt-2 text-xs font-semibold text-rose-600">
+          {paymentSelectionError}
+        </p>
+      ) : null}
+
       {error ? (
         <div className="mt-4 rounded-2xl border border-ember/30 bg-ember/10 p-4 text-sm text-ember">{error}</div>
       ) : null}
@@ -2242,12 +2391,14 @@ const Field = ({
   label,
   error,
   helper,
+  helperPosition = "after",
   children,
   className,
 }: {
   label: string
   error?: string
   helper?: string
+  helperPosition?: "before" | "after"
   children: ReactNode
   className?: string
 }) => (
@@ -2255,8 +2406,11 @@ const Field = ({
     <span className="text-sm font-semibold uppercase tracking-[0.2em] text-horizon/80 sm:text-lg sm:tracking-[0.3em]">
       {label}
     </span>
+    {helper && helperPosition === "before" ? (
+      <span className="text-sm text-midnight/70 sm:text-base">{helper}</span>
+    ) : null}
     {error ? <div className="field-error-control">{children}</div> : children}
-    {helper ? (
+    {helper && helperPosition === "after" ? (
       <span className="text-sm text-midnight/70 sm:text-base">{helper}</span>
     ) : null}
     {error ? <span className="field-error-text text-xs">{error}</span> : null}

@@ -56,7 +56,7 @@ export const AboutPage = () => {
           About Valley Airporter
         </h1>
         <p className="mt-4 max-w-3xl text-base text-midnight/75">
-          Valley Airporter has moved over 35,000 travellers across the Fraser Valley and Lower Mainland,
+          Valley Airporter has moved over 10,000 travellers across the Fraser Valley and Lower Mainland,
           combining door-to-door convenience with professional chauffeurs and modern shuttle vans.
         </p>
       </GlassPanel>
